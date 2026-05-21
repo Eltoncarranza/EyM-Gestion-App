@@ -32,6 +32,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableIntStateOf
+
+
+// Representa un producto que ya fue agregado al pedido actual
+data class ItemCarrito(
+    val nombre: String,
+    val cantidad: Int,
+    val precioUnitario: Double
+) {
+    val total: Double get() = cantidad * precioUnitario
+}
+
 @Composable
 fun VentaScreen() {
     val contexto = LocalContext.current
@@ -125,9 +136,13 @@ fun VistaApertura(alAbrirCaja: () -> Unit) {
 // Aquí diseñaremos las pestañas de Comida, Cafetería y Bebidas en el próximo paso
 @Composable
 fun VistaPuntoDeVenta() {
-    // Controla qué pestaña está activa (0=Comida, 1=Cafetería, 2=Bebidas)
     var tabSeleccionado by remember { mutableIntStateOf(0) }
     val tabs = listOf("Comida", "Cafetería", "Bebidas")
+
+    // Esta es la memoria temporal de nuestro pedido actual
+    var carrito by remember { mutableStateOf(listOf<ItemCarrito>()) }
+    // Calcula el total sumando el precio de todo lo que hay en el carrito
+    val totalMonto = carrito.sumOf { it.total }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // La barra de pestañas superior
@@ -141,51 +156,76 @@ fun VistaPuntoDeVenta() {
             }
         }
 
-        // El contenido que cambia según la pestaña
-        Box(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+        // El contenido (Los botones de productos)
+        // Usamos weight(1f) para que ocupe todo el espacio sobrante de la pantalla
+        Box(modifier = Modifier.weight(1f).padding(8.dp)) {
             when (tabSeleccionado) {
-                0 -> MenuComida()
-                1 -> MenuCafeteria()
-                2 -> MenuBebidas()
+                0 -> MenuComida { item -> carrito = carrito + item }
+                1 -> MenuCafeteria { item -> carrito = carrito + item }
+                2 -> MenuBebidas { item -> carrito = carrito + item }
+            }
+        }
+
+        // LA NUEVA BARRA INFERIOR DE COBRO (Solo aparece si hay algo en el carrito)
+        if (carrito.isNotEmpty()) {
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.fillMaxWidth(),
+                tonalElevation = 8.dp
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    // Resumen rápido de lo que estamos cobrando
+                    Text(text = "Pedido Actual: ${carrito.size} items", fontWeight = FontWeight.SemiBold)
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(text = "Total: S/. $totalMonto", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+
+                        Button(
+                            onClick = {
+                                println("Abriendo ventana de métodos de pago por S/. $totalMonto")
+                                // Aquí llamaremos a la ventana de pago más adelante
+                            },
+                            modifier = Modifier.height(50.dp)
+                        ) {
+                            Text("COBRAR", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // Botón para vaciar el carrito si te equivocaste
+                    TextButton(onClick = { carrito = emptyList() }) {
+                        Text("Vaciar pedido", color = MaterialTheme.colorScheme.error)
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-fun MenuComida() {
-    // Por ahora pondremos datos estáticos. Luego los traeremos de Supabase según lo que marcaste en la mañana.
+fun MenuComida(alAgregarAlCarrito: (ItemCarrito) -> Unit) {
     val platos = listOf("Tallarín" to 5.0, "Caldo de Pollo" to 5.0, "Patita" to 7.0)
-    GridProductos(platos)
+    GridProductos(platos, alAgregarAlCarrito)
 }
 
 @Composable
-fun MenuCafeteria() {
-    val cafes = listOf(
-        "Americano" to 3.0,
-        "Capuchino" to 5.0,
-        "Latte" to 5.0,
-        "Frapuchino" to 7.0,
-        "Espresso Martini" to 10.0
-    )
-    GridProductos(cafes)
+fun MenuCafeteria(alAgregarAlCarrito: (ItemCarrito) -> Unit) {
+    val cafes = listOf("Americano" to 3.0, "Capuchino" to 5.0, "Latte" to 5.0, "Frapuchino" to 7.0, "Espresso Martini" to 10.0)
+    GridProductos(cafes, alAgregarAlCarrito)
 }
 
 @Composable
-fun MenuBebidas() {
-    val bebidas = listOf(
-        "Gordita Inca Kola" to 3.5,
-        "Inca 1L" to 5.0,
-        "Pepsi 2L" to 6.0,
-        "Chicha Morada" to 2.5
-    )
-    GridProductos(bebidas)
+fun MenuBebidas(alAgregarAlCarrito: (ItemCarrito) -> Unit) {
+    val bebidas = listOf("Gordita Inca Kola" to 3.5, "Inca 1L" to 5.0, "Pepsi 2L" to 6.0, "Chicha Morada" to 2.5)
+    GridProductos(bebidas, alAgregarAlCarrito)
 }
-
-// Componente reutilizable que dibuja los botones cuadrados de los productos
 @Composable
-fun GridProductos(productos: List<Pair<String, Double>>) {
-    // Variable para saber qué producto se tocó. Si es null, la ventana se oculta.
+fun GridProductos(productos: List<Pair<String, Double>>, alAgregarAlCarrito: (ItemCarrito) -> Unit) {
     var productoSeleccionado by remember { mutableStateOf<Pair<String, Double>?>(null) }
 
     LazyVerticalGrid(
@@ -197,12 +237,8 @@ fun GridProductos(productos: List<Pair<String, Double>>) {
         items(productos) { producto ->
             Card(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(100.dp)
-                    .clickable {
-                        // Al tocar la tarjeta, guardamos el producto y se abre el Pop-up
-                        productoSeleccionado = producto
-                    },
+                    .fillMaxWidth().height(100.dp)
+                    .clickable { productoSeleccionado = producto },
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
@@ -219,17 +255,15 @@ fun GridProductos(productos: List<Pair<String, Double>>) {
         }
     }
 
-    // Si hay un producto seleccionado, dibujamos la ventana emergente en pantalla
     productoSeleccionado?.let { producto ->
         DialogoCobroProducto(
             producto = producto,
-            alDescartar = { productoSeleccionado = null }, // Cierra la ventana
+            alDescartar = { productoSeleccionado = null },
             alConfirmar = { cantidad, precioFinal ->
-                // Aquí calcularemos el total y pasaremos a los métodos de pago (Efectivo, Yape, Fiado)
-                val total = cantidad * precioFinal
-                println("LISTO PARA COBRAR: ${producto.first} x$cantidad = S/. $total (Precio modificado: $precioFinal)")
+                // AQUÍ ES LA MAGIA: Creamos el item y lo mandamos al carrito
+                val nuevoItem = ItemCarrito(producto.first, cantidad, precioFinal)
+                alAgregarAlCarrito(nuevoItem)
 
-                // Cerramos la ventana después de confirmar
                 productoSeleccionado = null
             }
         )
