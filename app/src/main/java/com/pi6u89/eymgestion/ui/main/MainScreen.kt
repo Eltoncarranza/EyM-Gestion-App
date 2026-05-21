@@ -11,7 +11,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.pi6u89.eymgestion.ui.fiados.FiadosScreen
 import com.pi6u89.eymgestion.ui.reportes.ReportesScreen
-import com.pi6u89.eymgestion.ui.Compras.VajillaScreen
+import com.pi6u89.eymgestion.ui.compras.ComprasScreen
 import com.pi6u89.eymgestion.ui.venta.VentaScreen
 
 @Composable
@@ -73,7 +73,7 @@ fun MainScreen() {
         ) {
             composable("venta") { VentaScreen() }
             composable("fiados") { FiadosScreen() }
-            composable("vajilla") { VajillaScreen() }
+            composable("Compras") { ComprasScreen() }
             composable("reportes") { ReportesScreen() }
         }
     }
