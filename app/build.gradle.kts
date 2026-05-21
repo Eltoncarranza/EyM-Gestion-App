@@ -63,6 +63,7 @@ dependencies {
     implementation("io.github.jan-tennert.supabase:realtime-kt")
 
     implementation("io.ktor:ktor-client-android:2.3.11")
-
+// 🎨 Librería completa de íconos de Material Design
+    implementation("androidx.compose.material:material-icons-extended")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 }
