@@ -58,4 +58,35 @@ class ClienteRepository {
             }
         }
     }
+    // Cambia el estado de todas las deudas de un cliente a "pagado = true"
+    suspend fun liquidarDeudaCliente(clienteId: Int): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                SupabaseClient.client.postgrest["fiados"]
+                    .update(mapOf("pagado" to true)) {
+                        filter { eq("cliente_id", clienteId) }
+                    }
+                true
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
+            }
+        }
+    }
+
+    // Cambia el estado de todos los platos prestados de un cliente a "devuelto = true"
+    suspend fun registrarDevolucionPlatos(clienteId: Int): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                SupabaseClient.client.postgrest["platos_prestados"]
+                    .update(mapOf("devuelto" to true)) {
+                        filter { eq("cliente_id", clienteId) }
+                    }
+                true
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
+            }
+        }
+    }
 }
