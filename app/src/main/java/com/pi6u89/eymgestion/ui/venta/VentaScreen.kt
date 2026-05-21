@@ -1,5 +1,9 @@
 package com.pi6u89.eymgestion.ui.venta
 
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -31,6 +35,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.mutableIntStateOf
 
 
@@ -139,13 +146,14 @@ fun VistaPuntoDeVenta() {
     var tabSeleccionado by remember { mutableIntStateOf(0) }
     val tabs = listOf("Comida", "Cafetería", "Bebidas")
 
-    // Esta es la memoria temporal de nuestro pedido actual
+    // Lista del carrito de compras
     var carrito by remember { mutableStateOf(listOf<ItemCarrito>()) }
-    // Calcula el total sumando el precio de todo lo que hay en el carrito
     val totalMonto = carrito.sumOf { it.total }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        // La barra de pestañas superior
+    // 👇 LA SOLUCIÓN: La variable debe ir aquí, junto a las demás
+    var mostrarDialogoPago by remember { mutableStateOf(false) }
+Column(modifier = Modifier.fillMaxSize()) {
+        // 1. Barra de pestañas superior
         TabRow(selectedTabIndex = tabSeleccionado) {
             tabs.forEachIndexed { index, titulo ->
                 Tab(
@@ -156,8 +164,7 @@ fun VistaPuntoDeVenta() {
             }
         }
 
-        // El contenido (Los botones de productos)
-        // Usamos weight(1f) para que ocupe todo el espacio sobrante de la pantalla
+        // 2. Cuadrícula de productos (Ocupa el espacio disponible)
         Box(modifier = Modifier.weight(1f).padding(8.dp)) {
             when (tabSeleccionado) {
                 0 -> MenuComida { item -> carrito = carrito + item }
@@ -166,19 +173,77 @@ fun VistaPuntoDeVenta() {
             }
         }
 
-        // LA NUEVA BARRA INFERIOR DE COBRO (Solo aparece si hay algo en el carrito)
+        // 3. SECCIÓN DEL CARRITO DETALLADO (Solo aparece si hay productos)
         if (carrito.isNotEmpty()) {
+            var mostrarDialogoPago by remember { mutableStateOf(false) }
             Surface(
                 color = MaterialTheme.colorScheme.primaryContainer,
                 modifier = Modifier.fillMaxWidth(),
                 tonalElevation = 8.dp
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    // Resumen rápido de lo que estamos cobrando
-                    Text(text = "Pedido Actual: ${carrito.size} items", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = "Pedido Actual",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
+                    // Lista deslizable de los productos agregados
+                    // Limitamos su altura máxima a 140dp para que no tape toda la pantalla
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 140.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        // Usamos itemsIndexed para saber la posición exacta de cada producto
+                        itemsIndexed(carrito) { index, item ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Muestra: "2x Tallarín"
+                                Text(
+                                    text = "${item.cantidad}x ${item.nombre}",
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+
+                                // Muestra el subtotal de ese producto (Ej: "S/. 10.0")
+                                Text(
+                                    text = "S/. ${item.total}",
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                )
+
+                                // BOTÓN DE ELIMINACIÓN INDIVIDUAL
+                                IconButton(
+                                    onClick = {
+                                        // Filtramos la lista para quitar SOLAMENTE el elemento de este índice
+                                        carrito = carrito.filterIndexed { i, _ -> i != index }
+                                    },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = "Eliminar producto",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+                    // Fila final con el total y el botón de cobrar
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -187,23 +252,41 @@ fun VistaPuntoDeVenta() {
                         Text(text = "Total: S/. $totalMonto", fontSize = 22.sp, fontWeight = FontWeight.Bold)
 
                         Button(
-                            onClick = {
-                                println("Abriendo ventana de métodos de pago por S/. $totalMonto")
-                                // Aquí llamaremos a la ventana de pago más adelante
-                            },
+                            onClick = { mostrarDialogoPago = true }, // <- CAMBIO AQUÍ
                             modifier = Modifier.height(50.dp)
                         ) {
                             Text("COBRAR", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
-                    // Botón para vaciar el carrito si te equivocaste
-                    TextButton(onClick = { carrito = emptyList() }) {
-                        Text("Vaciar pedido", color = MaterialTheme.colorScheme.error)
+                    TextButton(
+                        onClick = { carrito = emptyList() },
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    ) {
+                        Text("Vaciar todo el pedido", color = MaterialTheme.colorScheme.error)
                     }
                 }
             }
         }
+    }
+    // Lógica para mostrar la ventana de pago final
+    if (mostrarDialogoPago) {
+        DialogoPago(
+            totalMonto = totalMonto,
+            alDescartar = { mostrarDialogoPago = false },
+            alConfirmar = { metodo, prestaPlato ->
+                // Aquí más adelante enviaremos toda la información a Supabase
+                println(">>> VENTA REGISTRADA <<<")
+                println("Total: S/. $totalMonto")
+                println("Método: $metodo")
+                println("Presta plato: $prestaPlato")
+                println("Items: ${carrito.map { it.nombre }}")
+
+                // Limpiamos la pantalla para el siguiente cliente
+                carrito = emptyList()
+                mostrarDialogoPago = false
+            }
+        )
     }
 }
 
@@ -349,5 +432,94 @@ fun FilaPlato(nombre: String, activo: Boolean, onCambio: (Boolean) -> Unit) {
             checked = activo,
             onCheckedChange = onCambio
         )
+    }
+}
+@Composable
+fun DialogoPago(
+    totalMonto: Double,
+    alDescartar: () -> Unit,
+    alConfirmar: (metodo: String, prestaPlato: Boolean) -> Unit
+) {
+    // Estados internos de la ventana de pago
+    var metodoSeleccionado by remember { mutableStateOf("Efectivo") }
+    var prestaPlato by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = alDescartar,
+        title = { Text(text = "Finalizar Venta", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Monto a cobrar: S/. $totalMonto",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                Text(text = "Método de Pago:", fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Fila con los 3 botones de pago
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    BotonMetodoPago("Efectivo", metodoSeleccionado) { metodoSeleccionado = it }
+                    BotonMetodoPago("Yape/Plin", metodoSeleccionado) { metodoSeleccionado = it }
+                    BotonMetodoPago("Fiado", metodoSeleccionado) { metodoSeleccionado = it }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Divider()
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Checkbox para el control de vajilla
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { prestaPlato = !prestaPlato }
+                        .padding(vertical = 4.dp)
+                ) {
+                    Checkbox(
+                        checked = prestaPlato,
+                        onCheckedChange = { prestaPlato = it }
+                    )
+                    Text(text = "Se presta vajilla/plato al cliente", fontSize = 16.sp)
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { alConfirmar(metodoSeleccionado, prestaPlato) }) {
+                Text("Confirmar Venta")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = alDescartar) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+// Sub-componente para hacer que los botones de pago cambien de color al tocarlos
+@Composable
+fun RowScope.BotonMetodoPago(
+    metodo: String,
+    metodoActual: String,
+    alSeleccionar: (String) -> Unit
+) {
+    val estaSeleccionado = metodo == metodoActual
+
+    OutlinedButton(
+        onClick = { alSeleccionar(metodo) },
+        modifier = Modifier.weight(1f),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = if (estaSeleccionado) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+            contentColor = if (estaSeleccionado) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+        )
+    ) {
+        Text(text = metodo, fontSize = 12.sp, maxLines = 1)
     }
 }
