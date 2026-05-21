@@ -24,6 +24,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.LocalContext
 import com.pi6u89.eymgestion.data.CajaManager
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableIntStateOf
 @Composable
 fun VentaScreen() {
     val contexto = LocalContext.current
@@ -177,8 +185,11 @@ fun MenuBebidas() {
 // Componente reutilizable que dibuja los botones cuadrados de los productos
 @Composable
 fun GridProductos(productos: List<Pair<String, Double>>) {
+    // Variable para saber qué producto se tocó. Si es null, la ventana se oculta.
+    var productoSeleccionado by remember { mutableStateOf<Pair<String, Double>?>(null) }
+
     LazyVerticalGrid(
-        columns = GridCells.Fixed(2), // Muestra 2 columnas
+        columns = GridCells.Fixed(2),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxSize()
@@ -189,8 +200,8 @@ fun GridProductos(productos: List<Pair<String, Double>>) {
                     .fillMaxWidth()
                     .height(100.dp)
                     .clickable {
-                        // Aquí abriremos la ventana para modificar el precio
-                        println("Tocaste ${producto.first}")
+                        // Al tocar la tarjeta, guardamos el producto y se abre el Pop-up
+                        productoSeleccionado = producto
                     },
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -207,6 +218,90 @@ fun GridProductos(productos: List<Pair<String, Double>>) {
             }
         }
     }
+
+    // Si hay un producto seleccionado, dibujamos la ventana emergente en pantalla
+    productoSeleccionado?.let { producto ->
+        DialogoCobroProducto(
+            producto = producto,
+            alDescartar = { productoSeleccionado = null }, // Cierra la ventana
+            alConfirmar = { cantidad, precioFinal ->
+                // Aquí calcularemos el total y pasaremos a los métodos de pago (Efectivo, Yape, Fiado)
+                val total = cantidad * precioFinal
+                println("LISTO PARA COBRAR: ${producto.first} x$cantidad = S/. $total (Precio modificado: $precioFinal)")
+
+                // Cerramos la ventana después de confirmar
+                productoSeleccionado = null
+            }
+        )
+    }
+}
+@Composable
+fun DialogoCobroProducto(
+    producto: Pair<String, Double>,
+    alDescartar: () -> Unit,
+    alConfirmar: (Int, Double) -> Unit // Devuelve la cantidad y el precio final modificado
+) {
+    var cantidad by remember { mutableIntStateOf(1) }
+    // Iniciamos el campo de texto con el precio sugerido del producto
+    var precioEditado by remember { mutableStateOf(producto.second.toString()) }
+
+    AlertDialog(
+        onDismissRequest = alDescartar,
+        title = { Text(text = producto.first, fontWeight = FontWeight.Bold, fontSize = 20.sp) },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Fila para controlar la cantidad
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Cantidad:", fontWeight = FontWeight.SemiBold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { if (cantidad > 1) cantidad-- }) {
+                            Icon(Icons.Default.Remove, contentDescription = "Menos")
+                        }
+                        Text(
+                            text = cantidad.toString(),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                        IconButton(onClick = { cantidad++ }) {
+                            Icon(Icons.Default.Add, contentDescription = "Más")
+                        }
+                    }
+                }
+
+                // Campo de texto para modificar el precio
+                OutlinedTextField(
+                    value = precioEditado,
+                    onValueChange = { precioEditado = it },
+                    label = { Text("Precio Unitario (S/.)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                // Convertimos el texto a número. Si el usuario dejó vacío, usamos el precio original.
+                val precioFinal = precioEditado.toDoubleOrNull() ?: producto.second
+                alConfirmar(cantidad, precioFinal)
+            }) {
+                Text("Confirmar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = alDescartar) {
+                Text("Cancelar")
+            }
+        }
+    )
 }
 @Composable
 fun FilaPlato(nombre: String, activo: Boolean, onCambio: (Boolean) -> Unit) {
