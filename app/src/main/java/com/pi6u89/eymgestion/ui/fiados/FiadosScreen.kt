@@ -15,6 +15,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pi6u89.eymgestion.data.ClienteRepository
 import com.pi6u89.eymgestion.domain.Cliente
+import com.pi6u89.eymgestion.domain.Fiado
+import com.pi6u89.eymgestion.domain.PlatoPrestado
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -23,16 +25,19 @@ fun FiadosScreen() {
     val clienteRepository = remember { ClienteRepository() }
     val coroutineScope = rememberCoroutineScope()
 
-    // Lista de clientes que se mostrará en pantalla
     var clientes by remember { mutableStateOf<List<Cliente>>(emptyList()) }
-    var cargando by remember { mutableStateOf(true) }
+    // Memoria para las deudas y platos
+    var listaFiados by remember { mutableStateOf<List<Fiado>>(emptyList()) }
+    var listaPlatos by remember { mutableStateOf<List<PlatoPrestado>>(emptyList()) }
 
-    // Controla si se muestra la ventana para agregar un cliente
+    var cargando by remember { mutableStateOf(true) }
     var mostrarDialogoNuevoCliente by remember { mutableStateOf(false) }
 
-    // Esta función se ejecuta apenas abres la pestaña para descargar los datos
+    // Descargamos Clientes, Deudas y Platos al mismo tiempo
     LaunchedEffect(Unit) {
         clientes = clienteRepository.obtenerClientes()
+        listaFiados = clienteRepository.obtenerDeudasActivas()
+        listaPlatos = clienteRepository.obtenerPlatosSinDevolver()
         cargando = false
     }
 
@@ -49,7 +54,7 @@ fun FiadosScreen() {
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
-            Text(text = "Mis Clientes (Caseritos)", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Text(text = "Mis Caseritos y Deudas", fontSize = 24.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(16.dp))
 
             if (cargando) {
@@ -59,20 +64,42 @@ fun FiadosScreen() {
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(clientes) { cliente ->
+
+                        // MAGIA: Filtramos y sumamos lo de este cliente específico
+                        val deudaTotal = listaFiados.filter { it.clienteId == cliente.id }.sumOf { it.monto }
+                        val platosTotales = listaPlatos.filter { it.clienteId == cliente.id }.sumOf { it.cantidadPlatos }
+
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween // Separa el nombre de las deudas
                             ) {
-                                Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(40.dp))
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Column {
-                                    Text(text = cliente.nombre, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                                    if (cliente.telefono.isNotEmpty()) {
-                                        Text(text = "Cel: ${cliente.telefono}", fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(40.dp))
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Column {
+                                        Text(text = cliente.nombre, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                                        if (cliente.telefono.isNotEmpty()) {
+                                            Text(text = "Cel: ${cliente.telefono}", fontSize = 14.sp)
+                                        }
+                                    }
+                                }
+
+                                // COLUMNA DE DEUDAS (Lado derecho)
+                                Column(horizontalAlignment = Alignment.End) {
+                                    if (deudaTotal > 0) {
+                                        Text(text = "S/. $deudaTotal", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                                    }
+                                    if (platosTotales > 0) {
+                                        Text(text = "$platosTotales platos", fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
+                                    }
+                                    // Si no debe nada, mostramos un mensaje amigable
+                                    if (deudaTotal == 0.0 && platosTotales == 0) {
+                                        Text(text = "Sin deudas", fontSize = 14.sp, color = MaterialTheme.colorScheme.secondary)
                                     }
                                 }
                             }
@@ -114,12 +141,9 @@ fun FiadosScreen() {
                     onClick = {
                         if (nombreNuevo.isNotBlank()) {
                             coroutineScope.launch {
-                                // 1. Marcamos como cargando
                                 cargando = true
-                                // 2. Guardamos en Supabase
                                 val nuevoCliente = Cliente(nombre = nombreNuevo, telefono = telefonoNuevo)
                                 clienteRepository.agregarCliente(nuevoCliente)
-                                // 3. Volvemos a descargar la lista actualizada
                                 clientes = clienteRepository.obtenerClientes()
                                 cargando = false
                             }
@@ -131,9 +155,7 @@ fun FiadosScreen() {
                 }
             },
             dismissButton = {
-                TextButton(onClick = { mostrarDialogoNuevoCliente = false }) {
-                    Text("Cancelar")
-                }
+                TextButton(onClick = { mostrarDialogoNuevoCliente = false }) { Text("Cancelar") }
             }
         )
     }

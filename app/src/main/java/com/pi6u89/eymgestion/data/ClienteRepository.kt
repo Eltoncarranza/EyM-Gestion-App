@@ -33,4 +33,29 @@ class ClienteRepository {
             }
         }
     }
+    // Descarga todos los fiados que AÚN NO han sido pagados
+    suspend fun obtenerDeudasActivas(): List<com.pi6u89.eymgestion.domain.Fiado> {
+        return withContext(Dispatchers.IO) {
+            try {
+                SupabaseClient.client.postgrest["fiados"]
+                    .select { filter { eq("pagado", false) } }
+                    .decodeList<com.pi6u89.eymgestion.domain.Fiado>()
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+    }
+
+    // Descarga toda la vajilla que AÚN NO ha sido devuelta
+    suspend fun obtenerPlatosSinDevolver(): List<com.pi6u89.eymgestion.domain.PlatoPrestado> {
+        return withContext(Dispatchers.IO) {
+            try {
+                SupabaseClient.client.postgrest["platos_prestados"]
+                    .select { filter { eq("devuelto", false) } }
+                    .decodeList<com.pi6u89.eymgestion.domain.PlatoPrestado>()
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+    }
 }

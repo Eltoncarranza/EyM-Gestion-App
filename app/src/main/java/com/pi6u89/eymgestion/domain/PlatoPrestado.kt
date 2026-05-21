@@ -6,11 +6,8 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class PlatoPrestado(
     val id: Int = 0,
-    @SerialName("cliente_id")
-    val clienteId: Int,
-    @SerialName("cantidad_platos")
-    val cantidadPlatos: Int,
-    @SerialName("fecha_prestamo")
-    val fechaPrestamo: String,
-    val devuelto: Boolean = false // Por defecto no está devuelto
+    @SerialName("cliente_id") val clienteId: Int,
+    @SerialName("cantidad_platos") val cantidadPlatos: Int,
+    @SerialName("fecha_prestamo") val fechaPrestamo: String,
+    val devuelto: Boolean = false // Para saber si ya nos trajo la vajilla
 )
