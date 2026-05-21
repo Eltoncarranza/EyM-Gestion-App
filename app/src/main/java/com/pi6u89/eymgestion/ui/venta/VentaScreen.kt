@@ -177,10 +177,8 @@ Column(modifier = Modifier.fillMaxSize()) {
             }
         }
 
-        // 3. SECCIÓN DEL CARRITO DETALLADO (Solo aparece si hay productos)
-        if (carrito.isNotEmpty()) {
-            var mostrarDialogoPago by remember { mutableStateOf(false) }
-            Surface(
+    if (carrito.isNotEmpty()) {
+        Surface(
                 color = MaterialTheme.colorScheme.primaryContainer,
                 modifier = Modifier.fillMaxWidth(),
                 tonalElevation = 8.dp
