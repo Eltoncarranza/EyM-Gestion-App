@@ -41,7 +41,12 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.mutableIntStateOf
 import com.pi6u89.eymgestion.data.VentasRepository
 import com.pi6u89.eymgestion.domain.Venta
-
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import com.pi6u89.eymgestion.data.ClienteRepository
+import com.pi6u89.eymgestion.domain.Cliente
+import com.pi6u89.eymgestion.domain.Fiado
+import com.pi6u89.eymgestion.domain.PlatoPrestado
 
 // Representa un producto que ya fue agregado al pedido actual
 data class ItemCarrito(
@@ -63,7 +68,13 @@ fun VentaScreen() {
 
     // Scope necesario para lanzar funciones de guardado en segundo plano
     val coroutineScope = rememberCoroutineScope()
+    val clienteRepository = remember { ClienteRepository() }
+    var listaClientes by remember { mutableStateOf<List<Cliente>>(emptyList()) }
 
+    // Descarga los clientes de Supabase apenas se abre la pantalla de ventas
+    LaunchedEffect(Unit) {
+        listaClientes = clienteRepository.obtenerClientes()
+    }
     if (!cajaAbierta) {
         VistaApertura(
             alAbrirCaja = {
@@ -154,9 +165,14 @@ fun VistaPuntoDeVenta() {
 
     val ventasRepository = remember { VentasRepository() }
     val coroutineScope = rememberCoroutineScope()
-    // 👇 LA SOLUCIÓN: La variable debe ir aquí, junto a las demás
     var mostrarDialogoPago by remember { mutableStateOf(false) }
-Column(modifier = Modifier.fillMaxSize()) {
+
+    // 👇 ESTAS DOS LÍNEAS DEBEN ESTAR AQUÍ ADENTRO
+    val clienteRepository = remember { ClienteRepository() }
+    var listaClientes by remember { mutableStateOf<List<Cliente>>(emptyList()) }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // ... el resto de tu código continúa igual
         // 1. Barra de pestañas superior
         TabRow(selectedTabIndex = tabSeleccionado) {
             tabs.forEachIndexed { index, titulo ->
@@ -244,8 +260,7 @@ Column(modifier = Modifier.fillMaxSize()) {
                     }
 
                     Divider(modifier = Modifier.padding(vertical = 8.dp))
-
-                    // Fila final con el total y el botón de cobrar
+// Fila final con el total y el botón de cobrar
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -253,8 +268,15 @@ Column(modifier = Modifier.fillMaxSize()) {
                     ) {
                         Text(text = "Total: S/. $totalMonto", fontSize = 22.sp, fontWeight = FontWeight.Bold)
 
+                        // 👇 ESTE ES EL BOTÓN QUE SE MODIFICA
                         Button(
-                            onClick = { mostrarDialogoPago = true }, // <- CAMBIO AQUÍ
+                            onClick = {
+                                // Lanzamos la corrutina para traer los clientes antes de abrir la ventana
+                                coroutineScope.launch {
+                                    listaClientes = clienteRepository.obtenerClientes()
+                                    mostrarDialogoPago = true
+                                }
+                            },
                             modifier = Modifier.height(50.dp)
                         ) {
                             Text("COBRAR", fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -275,27 +297,49 @@ Column(modifier = Modifier.fillMaxSize()) {
     if (mostrarDialogoPago) {
         DialogoPago(
             totalMonto = totalMonto,
+            clientes = listaClientes, // <--- Pasamos la lista nueva
             alDescartar = { mostrarDialogoPago = false },
-            alConfirmar = { metodo, prestaPlato ->
-                // 1. Creamos el objeto Venta con los datos actuales
+            alConfirmar = { metodo, prestaPlato, clienteId ->
                 val nuevaVenta = Venta(
                     montoTotal = totalMonto,
                     metodoPago = metodo,
-                    prestaPlato = prestaPlato
-                    // la fecha y el cliente_id se quedan por defecto (hoy y null)
+                    prestaPlato = prestaPlato,
+                    clienteId = clienteId
                 )
 
-                // 2. Lanzamos la petición a internet en segundo plano
                 coroutineScope.launch {
-                    val exito = ventasRepository.registrarVenta(nuevaVenta)
-                    if (exito) {
-                        println("¡Venta guardada en Supabase con éxito!")
-                    } else {
-                        println("Error al conectar con Supabase. Revisa tu conexión.")
+                    // 1. Guardamos la venta principal
+                    val exitoVenta = ventasRepository.registrarVenta(nuevaVenta)
+
+                    if (exitoVenta) {
+                        println("¡Venta general guardada en Supabase!")
+
+                        // 2. Si el método es Fiado, registramos la deuda en su tabla
+                        if (metodo == "Fiado" && clienteId != null) {
+                            val nuevoFiado = Fiado(
+                                clienteId = clienteId,
+                                monto = totalMonto,
+                                fecha = ventasRepository.obtenerFechaHoy()
+                            )
+                            ventasRepository.registrarFiado(nuevoFiado)
+                            println("¡Deuda de S/. $totalMonto asignada al cliente!")
+                        }
+
+                        // 3. Si se prestó plato, registramos la cantidad de platos llevados
+                        if (prestaPlato && clienteId != null) {
+                            val nuevoPlato = PlatoPrestado(
+                                clienteId = clienteId,
+                                // Sumamos todas las cantidades del carrito para saber cuántos platos se llevó
+                                cantidadPlatos = carrito.sumOf { it.cantidad },
+                                fechaPrestamo = ventasRepository.obtenerFechaHoy()
+                            )
+                            ventasRepository.registrarPlatoPrestado(nuevoPlato)
+                            println("¡Vajilla registrada al cliente!")
+                        }
                     }
                 }
 
-                // 3. Limpiamos el carrito y cerramos el diálogo de inmediato para atender rápido
+                // Limpiamos la pantalla
                 carrito = emptyList()
                 mostrarDialogoPago = false
             }
@@ -450,12 +494,22 @@ fun FilaPlato(nombre: String, activo: Boolean, onCambio: (Boolean) -> Unit) {
 @Composable
 fun DialogoPago(
     totalMonto: Double,
+    clientes: List<Cliente>, // Recibe la lista
     alDescartar: () -> Unit,
-    alConfirmar: (metodo: String, prestaPlato: Boolean) -> Unit
+    alConfirmar: (metodo: String, prestaPlato: Boolean, clienteId: Int?) -> Unit // Devuelve el ID
 ) {
-    // Estados internos de la ventana de pago
     var metodoSeleccionado by remember { mutableStateOf("Efectivo") }
     var prestaPlato by remember { mutableStateOf(false) }
+
+    // Variables para el menú de clientes
+    var clienteSeleccionado by remember { mutableStateOf<Cliente?>(null) }
+    var menuExpandido by remember { mutableStateOf(false) }
+
+    // ¿Se necesita elegir un cliente obligatoriamente?
+    val requiereCliente = metodoSeleccionado == "Fiado" || prestaPlato
+
+    // ¿El botón de confirmar debe estar habilitado?
+    val puedeConfirmar = if (requiereCliente) clienteSeleccionado != null else true
 
     AlertDialog(
         onDismissRequest = alDescartar,
@@ -473,7 +527,6 @@ fun DialogoPago(
                 Text(text = "Método de Pago:", fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Fila con los 3 botones de pago
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -487,7 +540,6 @@ fun DialogoPago(
                 Divider()
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Checkbox para el control de vajilla
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -495,23 +547,54 @@ fun DialogoPago(
                         .clickable { prestaPlato = !prestaPlato }
                         .padding(vertical = 4.dp)
                 ) {
-                    Checkbox(
-                        checked = prestaPlato,
-                        onCheckedChange = { prestaPlato = it }
-                    )
-                    Text(text = "Se presta vajilla/plato al cliente", fontSize = 16.sp)
+                    Checkbox(checked = prestaPlato, onCheckedChange = { prestaPlato = it })
+                    Text(text = "Se presta vajilla al cliente", fontSize = 16.sp)
+                }
+
+                // MAGIA: El selector aparece solo si es Fiado o si se presta vajilla
+                if (requiereCliente) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Selecciona al Caserito:", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+
+                    Box(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                        OutlinedButton(
+                            onClick = { menuExpandido = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(text = clienteSeleccionado?.nombre ?: "Elegir Cliente...")
+                        }
+
+                        DropdownMenu(
+                            expanded = menuExpandido,
+                            onDismissRequest = { menuExpandido = false },
+                            modifier = Modifier.fillMaxWidth(0.8f)
+                        ) {
+                            clientes.forEach { cliente ->
+                                DropdownMenuItem(
+                                    text = { Text(cliente.nombre) },
+                                    onClick = {
+                                        clienteSeleccionado = cliente
+                                        menuExpandido = false
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         },
         confirmButton = {
-            Button(onClick = { alConfirmar(metodoSeleccionado, prestaPlato) }) {
+            Button(
+                onClick = {
+                    alConfirmar(metodoSeleccionado, prestaPlato, clienteSeleccionado?.id)
+                },
+                enabled = puedeConfirmar // Se bloquea si falta elegir cliente
+            ) {
                 Text("Confirmar Venta")
             }
         },
         dismissButton = {
-            TextButton(onClick = alDescartar) {
-                Text("Cancelar")
-            }
+            TextButton(onClick = alDescartar) { Text("Cancelar") }
         }
     )
 }

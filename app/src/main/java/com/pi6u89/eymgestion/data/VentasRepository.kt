@@ -1,23 +1,57 @@
 package com.pi6u89.eymgestion.data
 
+import com.pi6u89.eymgestion.domain.Fiado
+import com.pi6u89.eymgestion.domain.PlatoPrestado
 import com.pi6u89.eymgestion.domain.Venta
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class VentasRepository {
 
-    // Suspend fun permite que la función corra en segundo plano sin congelar la pantalla
     suspend fun registrarVenta(venta: Venta): Boolean {
         return withContext(Dispatchers.IO) {
             try {
-                // Accedemos al cliente de Supabase, entramos a la tabla "ventas" e insertamos el objeto
                 SupabaseClient.client.postgrest["ventas"].insert(venta)
-                true // Si todo sale bien, devuelve verdadero
+                true
             } catch (e: Exception) {
                 e.printStackTrace()
-                false // Si hay un error (ej. sin internet), devuelve falso
+                false
             }
         }
+    }
+
+    // NUEVO: Función para registrar la deuda
+    suspend fun registrarFiado(fiado: Fiado): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                SupabaseClient.client.postgrest["fiados"].insert(fiado)
+                true
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
+            }
+        }
+    }
+
+    // NUEVO: Función para registrar la vajilla prestada
+    suspend fun registrarPlatoPrestado(plato: PlatoPrestado): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                SupabaseClient.client.postgrest["platos_prestados"].insert(plato)
+                true
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
+            }
+        }
+    }
+
+    // Herramienta auxiliar para la fecha (Ej: "2026-05-21")
+    fun obtenerFechaHoy(): String {
+        return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
     }
 }

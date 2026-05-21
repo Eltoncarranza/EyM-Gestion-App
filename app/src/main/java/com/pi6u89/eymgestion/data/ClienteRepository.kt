@@ -7,7 +7,7 @@ import kotlinx.coroutines.withContext
 
 class ClienteRepository {
 
-    // Función para descargar toda la lista de clientes de la nube
+    // Función para descargar toda la lista de clientes (Caseritos) de la nube
     suspend fun obtenerClientes(): List<Cliente> {
         return withContext(Dispatchers.IO) {
             try {
@@ -16,7 +16,7 @@ class ClienteRepository {
                     .decodeList<Cliente>()
             } catch (e: Exception) {
                 e.printStackTrace()
-                emptyList() // Si hay error o no hay internet, devuelve una lista vacía
+                emptyList() // Si no hay internet, devuelve una lista vacía para no crashear
             }
         }
     }
@@ -25,7 +25,6 @@ class ClienteRepository {
     suspend fun agregarCliente(cliente: Cliente): Boolean {
         return withContext(Dispatchers.IO) {
             try {
-                // Al insertar, Supabase le asignará su ID automáticamente
                 SupabaseClient.client.postgrest["clientes"].insert(cliente)
                 true
             } catch (e: Exception) {
