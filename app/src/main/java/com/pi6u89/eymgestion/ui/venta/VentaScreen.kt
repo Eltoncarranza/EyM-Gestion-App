@@ -12,15 +12,39 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
+import com.pi6u89.eymgestion.data.CajaManager
+import kotlinx.coroutines.launch
 @Composable
 fun VentaScreen() {
-    // Esta variable es el "switch" maestro.
-    // Si es false, muestra la configuración. Si es true, muestra el menú para vender.
-    var cajaAbierta by remember { mutableStateOf(false) }
+    val contexto = LocalContext.current
+    // Inicializamos el administrador de la caja
+    val cajaManager = remember { CajaManager(contexto) }
+
+    // Recolectamos el estado asíncrono de DataStore. Por defecto arranca en false.
+    val cajaAbierta by cajaManager.cajaAbiertaFlow.collectAsState(initial = false)
+
+    // Scope necesario para lanzar funciones de guardado en segundo plano
+    val coroutineScope = rememberCoroutineScope()
 
     if (!cajaAbierta) {
-        VistaApertura(alAbrirCaja = { cajaAbierta = true })
+        VistaApertura(
+            alAbrirCaja = {
+                // Ejecutamos la escritura en disco de forma segura dentro de una corrutina
+                coroutineScope.launch {
+                    cajaManager.abrirCaja()
+                }
+            }
+        )
     } else {
         VistaPuntoDeVenta()
     }
@@ -93,11 +117,97 @@ fun VistaApertura(alAbrirCaja: () -> Unit) {
 // Aquí diseñaremos las pestañas de Comida, Cafetería y Bebidas en el próximo paso
 @Composable
 fun VistaPuntoDeVenta() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("🛒 Caja Abierta. ¡A vender!", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+    // Controla qué pestaña está activa (0=Comida, 1=Cafetería, 2=Bebidas)
+    var tabSeleccionado by remember { mutableIntStateOf(0) }
+    val tabs = listOf("Comida", "Cafetería", "Bebidas")
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // La barra de pestañas superior
+        TabRow(selectedTabIndex = tabSeleccionado) {
+            tabs.forEachIndexed { index, titulo ->
+                Tab(
+                    selected = tabSeleccionado == index,
+                    onClick = { tabSeleccionado = index },
+                    text = { Text(titulo, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
+                )
+            }
+        }
+
+        // El contenido que cambia según la pestaña
+        Box(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+            when (tabSeleccionado) {
+                0 -> MenuComida()
+                1 -> MenuCafeteria()
+                2 -> MenuBebidas()
+            }
+        }
     }
 }
 
+@Composable
+fun MenuComida() {
+    // Por ahora pondremos datos estáticos. Luego los traeremos de Supabase según lo que marcaste en la mañana.
+    val platos = listOf("Tallarín" to 5.0, "Caldo de Pollo" to 5.0, "Patita" to 7.0)
+    GridProductos(platos)
+}
+
+@Composable
+fun MenuCafeteria() {
+    val cafes = listOf(
+        "Americano" to 3.0,
+        "Capuchino" to 5.0,
+        "Latte" to 5.0,
+        "Frapuchino" to 7.0,
+        "Espresso Martini" to 10.0
+    )
+    GridProductos(cafes)
+}
+
+@Composable
+fun MenuBebidas() {
+    val bebidas = listOf(
+        "Gordita Inca Kola" to 3.5,
+        "Inca 1L" to 5.0,
+        "Pepsi 2L" to 6.0,
+        "Chicha Morada" to 2.5
+    )
+    GridProductos(bebidas)
+}
+
+// Componente reutilizable que dibuja los botones cuadrados de los productos
+@Composable
+fun GridProductos(productos: List<Pair<String, Double>>) {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2), // Muestra 2 columnas
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        items(productos) { producto ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .clickable {
+                        // Aquí abriremos la ventana para modificar el precio
+                        println("Tocaste ${producto.first}")
+                    },
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(8.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(text = producto.first, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = "S/. ${producto.second}", color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+    }
+}
 @Composable
 fun FilaPlato(nombre: String, activo: Boolean, onCambio: (Boolean) -> Unit) {
     Row(

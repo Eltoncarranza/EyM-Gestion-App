@@ -61,7 +61,7 @@ dependencies {
     implementation(platform("io.github.jan-tennert.supabase:bom:2.4.0"))
     implementation("io.github.jan-tennert.supabase:postgrest-kt")
     implementation("io.github.jan-tennert.supabase:realtime-kt")
-
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("io.ktor:ktor-client-android:2.3.11")
 // 🎨 Librería completa de íconos de Material Design
     implementation("androidx.compose.material:material-icons-extended")
