@@ -45,12 +45,12 @@ fun MainScreen() {
                     }
                 )
                 NavigationBarItem(
-                    icon = { Icon(Icons.Default.Warning, contentDescription = "Vajilla") },
-                    label = { Text("Vajilla") },
-                    selected = rutaActual == "vajilla",
+                    icon = { Icon(Icons.Default.List, contentDescription = "Compras") },
+                    label = { Text("Compras") },
+                    selected = rutaActual == "compras",
                     onClick = {
-                        rutaActual = "vajilla"
-                        bottomNavController.navigate("vajilla")
+                        rutaActual = "compras"
+                        bottomNavController.navigate("compras")
                     }
                 )
                 NavigationBarItem(
@@ -73,7 +73,7 @@ fun MainScreen() {
         ) {
             composable("venta") { VentaScreen() }
             composable("fiados") { FiadosScreen() }
-            composable("Compras") { ComprasScreen() }
+            composable("compras") { ComprasScreen() }
             composable("reportes") { ReportesScreen() }
         }
     }

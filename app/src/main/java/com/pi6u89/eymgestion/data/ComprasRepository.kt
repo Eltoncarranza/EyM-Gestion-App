@@ -63,4 +63,24 @@ class ComprasRepository {
             }
         }
     }
+
+    // Descarga solo los gastos confirmados el día de hoy
+    suspend fun obtenerGastosDeHoy(): List<ItemCompra> {
+        val hoy = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+        return withContext(Dispatchers.IO) {
+            try {
+                SupabaseClient.client.postgrest["lista_compras"]
+                    .select {
+                        filter {
+                            eq("fecha", hoy)
+                            eq("comprado", true) // Solo lo que sí se compró y gastó
+                        }
+                    }
+                    .decodeList<ItemCompra>()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                emptyList()
+            }
+        }
+    }
 }

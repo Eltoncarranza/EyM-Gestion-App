@@ -54,4 +54,19 @@ class VentasRepository {
     fun obtenerFechaHoy(): String {
         return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
     }
+    // Descarga solo las ventas realizadas el día de hoy
+    suspend fun obtenerVentasDeHoy(): List<Venta> {
+        val hoy = obtenerFechaHoy()
+        return withContext(Dispatchers.IO) {
+            try {
+                SupabaseClient.client.postgrest["ventas"]
+                    .select { filter { eq("fecha", hoy) } }
+                    .decodeList<Venta>()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                emptyList()
+            }
+        }
+    }
+
 }
