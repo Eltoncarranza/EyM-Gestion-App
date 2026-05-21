@@ -11,7 +11,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.pi6u89.eymgestion.ui.fiados.FiadosScreen
 import com.pi6u89.eymgestion.ui.reportes.ReportesScreen
-import com.pi6u89.eymgestion.ui.vajilla.VajillaScreen
+import com.pi6u89.eymgestion.ui.Compras.VajillaScreen
 import com.pi6u89.eymgestion.ui.venta.VentaScreen
 
 @Composable
