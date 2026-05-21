@@ -39,6 +39,8 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.mutableIntStateOf
+import com.pi6u89.eymgestion.data.VentasRepository
+import com.pi6u89.eymgestion.domain.Venta
 
 
 // Representa un producto que ya fue agregado al pedido actual
@@ -150,6 +152,8 @@ fun VistaPuntoDeVenta() {
     var carrito by remember { mutableStateOf(listOf<ItemCarrito>()) }
     val totalMonto = carrito.sumOf { it.total }
 
+    val ventasRepository = remember { VentasRepository() }
+    val coroutineScope = rememberCoroutineScope()
     // 👇 LA SOLUCIÓN: La variable debe ir aquí, junto a las demás
     var mostrarDialogoPago by remember { mutableStateOf(false) }
 Column(modifier = Modifier.fillMaxSize()) {
@@ -275,14 +279,25 @@ Column(modifier = Modifier.fillMaxSize()) {
             totalMonto = totalMonto,
             alDescartar = { mostrarDialogoPago = false },
             alConfirmar = { metodo, prestaPlato ->
-                // Aquí más adelante enviaremos toda la información a Supabase
-                println(">>> VENTA REGISTRADA <<<")
-                println("Total: S/. $totalMonto")
-                println("Método: $metodo")
-                println("Presta plato: $prestaPlato")
-                println("Items: ${carrito.map { it.nombre }}")
+                // 1. Creamos el objeto Venta con los datos actuales
+                val nuevaVenta = Venta(
+                    montoTotal = totalMonto,
+                    metodoPago = metodo,
+                    prestaPlato = prestaPlato
+                    // la fecha y el cliente_id se quedan por defecto (hoy y null)
+                )
 
-                // Limpiamos la pantalla para el siguiente cliente
+                // 2. Lanzamos la petición a internet en segundo plano
+                coroutineScope.launch {
+                    val exito = ventasRepository.registrarVenta(nuevaVenta)
+                    if (exito) {
+                        println("¡Venta guardada en Supabase con éxito!")
+                    } else {
+                        println("Error al conectar con Supabase. Revisa tu conexión.")
+                    }
+                }
+
+                // 3. Limpiamos el carrito y cerramos el diálogo de inmediato para atender rápido
                 carrito = emptyList()
                 mostrarDialogoPago = false
             }
