@@ -47,6 +47,10 @@ fun VentaScreen() {
     val contexto = LocalContext.current
     val cajaManager = remember { CajaManager(contexto) }
     val cajaAbierta by cajaManager.cajaAbiertaFlow.collectAsState(initial = false)
+
+    // 👇 Leemos los platos que se marcaron hoy en la memoria del celular
+    val platosActivos by cajaManager.platosActivosFlow.collectAsState(initial = emptySet())
+
     val coroutineScope = rememberCoroutineScope()
 
     val clienteRepository = remember { ClienteRepository() }
@@ -58,18 +62,20 @@ fun VentaScreen() {
 
     if (!cajaAbierta) {
         VistaApertura(
-            alAbrirCaja = {
-                coroutineScope.launch { cajaManager.abrirCaja() }
+            alAbrirCaja = { platosSeleccionados ->
+                // Guardamos en disco tanto la apertura de caja como los platos
+                coroutineScope.launch { cajaManager.abrirCaja(platosSeleccionados) }
             }
         )
     } else {
-        VistaPuntoDeVenta(listaClientes)
+        // Le enviamos la lista de platos activos a la vista de ventas
+        VistaPuntoDeVenta(listaClientes, platosActivos)
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun VistaApertura(alAbrirCaja: () -> Unit) {
+fun VistaApertura(alAbrirCaja: (Set<String>) -> Unit) { // 👈 Ahora pide un Set<String>
     var efectivoInicial by remember { mutableStateOf("") }
 
     var tallarin by remember { mutableStateOf(false) }
@@ -109,18 +115,31 @@ fun VistaApertura(alAbrirCaja: () -> Unit) {
 
         Text(text = "🍲 ¿Qué se cocina hoy?", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
 
-        FilaPlato("Tallarín (S/. 5.00)", tallarin) { tallarin = it }
-        FilaPlato("Caldo de Pollo (S/. 5.00)", caldoPollo) { caldoPollo = it }
-        FilaPlato("Salchipollo (S/. 5.00)", salchipollo) { salchipollo = it }
-        FilaPlato("Trigo con papa (S/. 5.00)", trigoPapa) { trigoPapa = it }
-        FilaPlato("Patita (S/. 7.00)", patita) { patita = it }
-        FilaPlato("Orejita (S/. 7.00)", orejita) { orejita = it }
-        FilaPlato("Padrastro (S/. 7.00)", padrastro) { padrastro = it }
+        FilaPlato("Tallarín", tallarin) { tallarin = it }
+        FilaPlato("Caldo de Pollo", caldoPollo) { caldoPollo = it }
+        FilaPlato("Salchipollo", salchipollo) { salchipollo = it }
+        FilaPlato("Trigo con papa", trigoPapa) { trigoPapa = it }
+        FilaPlato("Patita", patita) { patita = it }
+        FilaPlato("Orejita", orejita) { orejita = it }
+        FilaPlato("Padrastro", padrastro) { padrastro = it }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(
-            onClick = alAbrirCaja,
+            onClick = {
+                // 👇 MAGIA: Recopilamos todos los platos que el usuario encendió
+                val activos = mutableSetOf<String>()
+                if (tallarin) activos.add("Tallarín")
+                if (caldoPollo) activos.add("Caldo de Pollo")
+                if (salchipollo) activos.add("Salchipollo")
+                if (trigoPapa) activos.add("Trigo con papa")
+                if (patita) activos.add("Patita")
+                if (orejita) activos.add("Orejita")
+                if (padrastro) activos.add("Padrastro")
+
+                // Los enviamos al proceso de abrir caja
+                alAbrirCaja(activos)
+            },
             modifier = Modifier.fillMaxWidth().height(56.dp)
         ) {
             Text("Abrir Caja e Iniciar Día", fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -129,7 +148,7 @@ fun VistaApertura(alAbrirCaja: () -> Unit) {
 }
 
 @Composable
-fun VistaPuntoDeVenta(listaClientes: List<Cliente>) {
+fun VistaPuntoDeVenta(listaClientes: List<Cliente>, platosActivos: Set<String>) {
     var tabSeleccionado by remember { mutableIntStateOf(0) }
     val tabs = listOf("Comida", "Cafetería", "Bebidas")
 
@@ -153,7 +172,7 @@ fun VistaPuntoDeVenta(listaClientes: List<Cliente>) {
 
         Box(modifier = Modifier.weight(1f).padding(8.dp)) {
             when (tabSeleccionado) {
-                0 -> MenuComida { item -> carrito = carrito + item }
+                0 -> MenuComida(platosActivos) { item -> carrito = carrito + item } // 👈 Pasamos el filtro
                 1 -> MenuCafeteria { item -> carrito = carrito + item }
                 2 -> MenuBebidas { item -> carrito = carrito + item }
             }
@@ -249,8 +268,8 @@ fun VistaPuntoDeVenta(listaClientes: List<Cliente>) {
 }
 
 @Composable
-fun MenuComida(alAgregarAlCarrito: (ItemCarrito) -> Unit) {
-    val platos = listOf(
+fun MenuComida(platosActivos: Set<String>, alAgregarAlCarrito: (ItemCarrito) -> Unit) {
+    val platosMaestros = listOf(
         "Tallarín" to 5.0,
         "Caldo de Pollo" to 5.0,
         "Salchipollo" to 5.0,
@@ -259,7 +278,17 @@ fun MenuComida(alAgregarAlCarrito: (ItemCarrito) -> Unit) {
         "Orejita" to 7.0,
         "Padrastro" to 7.0
     )
-    GridProductos(platos, alAgregarAlCarrito)
+
+    // 👇 Aplicamos el filtro: Solo dejamos pasar los que se marcaron en la apertura
+    val platosDeHoy = platosMaestros.filter { platosActivos.contains(it.first) }
+
+    if (platosDeHoy.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("No hay platos seleccionados para hoy.", color = MaterialTheme.colorScheme.secondary)
+        }
+    } else {
+        GridProductos(platosDeHoy, alAgregarAlCarrito)
+    }
 }
 
 @Composable

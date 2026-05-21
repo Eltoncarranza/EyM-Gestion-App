@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -22,6 +23,8 @@ class CajaManager(private val context: Context) {
         // Llaves para almacenar los datos
         private val CAJA_ABIERTA_KEY = booleanPreferencesKey("caja_abierta")
         private val FECHA_APERTURA_KEY = stringPreferencesKey("fecha_apertura")
+        // 👇 NUEVA LLAVE: Para recordar los platos que se cocinaron hoy
+        private val PLATOS_ACTIVOS_KEY = stringSetPreferencesKey("platos_activos")
     }
 
     // Flujo (Flow) que verifica en tiempo real si la caja está abierta HOY
@@ -30,23 +33,29 @@ class CajaManager(private val context: Context) {
         val fechaGuardada = preferencias[FECHA_APERTURA_KEY] ?: ""
         val fechaHoy = obtenerFechaHoy()
 
-        // La caja está verdaderamente abierta si el interruptor es true Y corresponde a la fecha de hoy
         estaAbierta && fechaGuardada == fechaHoy
     }
 
-    // Guarda en el almacenamiento que la caja se abrió el día de hoy
-    suspend fun abrirCaja() {
+    // 👇 NUEVO: Flujo que devuelve la lista de platos marcados en la mañana
+    val platosActivosFlow: Flow<Set<String>> = context.dataStore.data.map { preferencias ->
+        preferencias[PLATOS_ACTIVOS_KEY] ?: emptySet()
+    }
+
+    // Guarda en el almacenamiento que la caja se abrió el día de hoy Y qué platos hay
+    suspend fun abrirCaja(platosSeleccionados: Set<String>) {
         context.dataStore.edit { preferencias ->
             preferencias[CAJA_ABIERTA_KEY] = true
             preferencias[FECHA_APERTURA_KEY] = obtenerFechaHoy()
+            preferencias[PLATOS_ACTIVOS_KEY] = platosSeleccionados // Guardamos los platos
         }
     }
 
-    // Cierra la caja (se usará en el módulo de reportes más adelante)
+    // Cierra la caja y limpia los platos de hoy
     suspend fun cerrarCaja() {
         context.dataStore.edit { preferencias ->
             preferencias[CAJA_ABIERTA_KEY] = false
             preferencias[FECHA_APERTURA_KEY] = ""
+            preferencias[PLATOS_ACTIVOS_KEY] = emptySet() // Limpiamos la lista
         }
     }
 
