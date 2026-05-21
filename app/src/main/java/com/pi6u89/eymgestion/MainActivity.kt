@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import com.pi6u89.eymgestion.ui.apertura.AperturaScreen
+import com.pi6u89.eymgestion.ui.navigation.AppNavigation // <- Importante
 import com.pi6u89.eymgestion.ui.theme.EyMGestionTheme
 
 class MainActivity : ComponentActivity() {
@@ -21,7 +21,8 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AperturaScreen()
+                    // Ahora el sistema de navegación controla qué se muestra
+                    AppNavigation()
                 }
             }
         }

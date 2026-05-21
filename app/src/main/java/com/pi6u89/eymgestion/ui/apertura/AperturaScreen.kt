@@ -12,14 +12,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
+import androidx.navigation.NavController
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AperturaScreen() {
-    // Variables para guardar lo que escribes y seleccionas en la pantalla
+fun AperturaScreen(navController: NavController) {
+    // Variable para el dinero de caja
     var efectivoInicial by remember { mutableStateOf("") }
 
-    // Estados de los platos especiales (Falso = No se cocinó hoy)
+    // Estados de TODOS los platos (Falso por defecto = apagado hasta que lo marques)
+    var tallarin by remember { mutableStateOf(false) }
+    var caldoPollo by remember { mutableStateOf(false) }
+    var salchipollo by remember { mutableStateOf(false) }
+    var trigoPapa by remember { mutableStateOf(false) }
     var patita by remember { mutableStateOf(false) }
     var orejita by remember { mutableStateOf(false) }
     var padrastro by remember { mutableStateOf(false) }
@@ -63,29 +67,30 @@ fun AperturaScreen() {
                 }
             }
 
-            // 2. SECCIÓN DEL MENÚ DEL DÍA
+            // 2. SECCIÓN DEL MENÚ DEL DÍA (Todos opcionales)
             Text(text = "¿Qué se cocina hoy?", fontSize = 20.sp, fontWeight = FontWeight.Bold)
 
-            // Platos fijos (Solo lectura, siempre están)
-            Text(text = "🍲 Platos Fijos (Siempre activos)", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
-            Text(text = "• Tallarín (S/. 5.00)\n• Caldo de Pollo (S/. 5.00)\n• Salchipollo (S/. 5.00)\n• Trigo con papa (S/. 5.00)", modifier = Modifier.padding(start = 8.dp))
+            Text(text = "🍲 Activa los platos disponibles", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
 
-            Divider()
-
-            // Platos especiales (Interruptores)
-            Text(text = "✨ Especiales del Día", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
-
-            FilaEspecial("Patita (S/. 7.00)", patita) { patita = it }
-            FilaEspecial("Orejita (S/. 7.00)", orejita) { orejita = it }
-            FilaEspecial("Padrastro (S/. 7.00)", padrastro) { padrastro = it }
+            FilaPlato("Tallarín (S/. 5.00)", tallarin) { tallarin = it }
+            FilaPlato("Caldo de Pollo (S/. 5.00)", caldoPollo) { caldoPollo = it }
+            FilaPlato("Salchipollo (S/. 5.00)", salchipollo) { salchipollo = it }
+            FilaPlato("Trigo con papa (S/. 5.00)", trigoPapa) { trigoPapa = it }
+            FilaPlato("Patita (S/. 7.00)", patita) { patita = it }
+            FilaPlato("Orejita (S/. 7.00)", orejita) { orejita = it }
+            FilaPlato("Padrastro (S/. 7.00)", padrastro) { padrastro = it }
 
             Spacer(modifier = Modifier.height(16.dp))
 
             // 3. BOTÓN PARA INICIAR
             Button(
                 onClick = {
-                    // Aquí luego pondremos la lógica para guardar en Supabase
-                    println("Iniciando con S/. $efectivoInicial, Patita: $patita, Orejita: $orejita, Padrastro: $padrastro")
+                    println("Iniciando con S/. $efectivoInicial")
+                    // Viaja a la pantalla de venta y elimina la de apertura del historial
+                    // para que si el usuario le da "Atrás", no vuelva a abrir la caja.
+                    navController.navigate("venta") {
+                        popUpTo("apertura") { inclusive = true }
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -97,9 +102,9 @@ fun AperturaScreen() {
     }
 }
 
-// Un pequeño componente reutilizable para que el código quede limpio
+// Componente reutilizable para las filas de platos
 @Composable
-fun FilaEspecial(nombre: String, activo: Boolean, onCambio: (Boolean) -> Unit) {
+fun FilaPlato(nombre: String, activo: Boolean, onCambio: (Boolean) -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
