@@ -47,10 +47,7 @@ fun VentaScreen() {
     val contexto = LocalContext.current
     val cajaManager = remember { CajaManager(contexto) }
     val cajaAbierta by cajaManager.cajaAbiertaFlow.collectAsState(initial = false)
-
-    // 👇 Leemos los platos que se marcaron hoy en la memoria del celular
     val platosActivos by cajaManager.platosActivosFlow.collectAsState(initial = emptySet())
-
     val coroutineScope = rememberCoroutineScope()
 
     val clienteRepository = remember { ClienteRepository() }
@@ -63,19 +60,17 @@ fun VentaScreen() {
     if (!cajaAbierta) {
         VistaApertura(
             alAbrirCaja = { platosSeleccionados ->
-                // Guardamos en disco tanto la apertura de caja como los platos
                 coroutineScope.launch { cajaManager.abrirCaja(platosSeleccionados) }
             }
         )
     } else {
-        // Le enviamos la lista de platos activos a la vista de ventas
         VistaPuntoDeVenta(listaClientes, platosActivos)
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun VistaApertura(alAbrirCaja: (Set<String>) -> Unit) { // 👈 Ahora pide un Set<String>
+fun VistaApertura(alAbrirCaja: (Set<String>) -> Unit) {
     var efectivoInicial by remember { mutableStateOf("") }
 
     var tallarin by remember { mutableStateOf(false) }
@@ -115,19 +110,18 @@ fun VistaApertura(alAbrirCaja: (Set<String>) -> Unit) { // 👈 Ahora pide un Se
 
         Text(text = "🍲 ¿Qué se cocina hoy?", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
 
-        FilaPlato("Tallarín", tallarin) { tallarin = it }
-        FilaPlato("Caldo de Pollo", caldoPollo) { caldoPollo = it }
-        FilaPlato("Salchipollo", salchipollo) { salchipollo = it }
-        FilaPlato("Trigo con papa", trigoPapa) { trigoPapa = it }
-        FilaPlato("Patita", patita) { patita = it }
-        FilaPlato("Orejita", orejita) { orejita = it }
-        FilaPlato("Padrastro", padrastro) { padrastro = it }
+        FilaPlato("Tallarín (S/. 5.00)", tallarin) { tallarin = it }
+        FilaPlato("Caldo de Pollo (S/. 5.00)", caldoPollo) { caldoPollo = it }
+        FilaPlato("Salchipollo (S/. 10.00)", salchipollo) { salchipollo = it }
+        FilaPlato("Trigo con papa (S/. 5.00)", trigoPapa) { trigoPapa = it }
+        FilaPlato("Patita (S/. 7.00)", patita) { patita = it }
+        FilaPlato("Orejita (S/. 7.00)", orejita) { orejita = it }
+        FilaPlato("Padrastro (S/. 7.00)", padrastro) { padrastro = it }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(
             onClick = {
-                // 👇 MAGIA: Recopilamos todos los platos que el usuario encendió
                 val activos = mutableSetOf<String>()
                 if (tallarin) activos.add("Tallarín")
                 if (caldoPollo) activos.add("Caldo de Pollo")
@@ -136,8 +130,6 @@ fun VistaApertura(alAbrirCaja: (Set<String>) -> Unit) { // 👈 Ahora pide un Se
                 if (patita) activos.add("Patita")
                 if (orejita) activos.add("Orejita")
                 if (padrastro) activos.add("Padrastro")
-
-                // Los enviamos al proceso de abrir caja
                 alAbrirCaja(activos)
             },
             modifier = Modifier.fillMaxWidth().height(56.dp)
@@ -172,7 +164,7 @@ fun VistaPuntoDeVenta(listaClientes: List<Cliente>, platosActivos: Set<String>) 
 
         Box(modifier = Modifier.weight(1f).padding(8.dp)) {
             when (tabSeleccionado) {
-                0 -> MenuComida(platosActivos) { item -> carrito = carrito + item } // 👈 Pasamos el filtro
+                0 -> MenuComida(platosActivos) { item -> carrito = carrito + item }
                 1 -> MenuCafeteria { item -> carrito = carrito + item }
                 2 -> MenuBebidas { item -> carrito = carrito + item }
             }
@@ -240,11 +232,17 @@ fun VistaPuntoDeVenta(listaClientes: List<Cliente>, platosActivos: Set<String>) 
             clientes = listaClientes,
             alDescartar = { mostrarDialogoPago = false },
             alConfirmar = { metodo, prestaPlato, clienteId ->
+                // Fuerza a que si no es Fiado, el estado sea "PAGADO"
+                val estado = if (metodo == "Fiado") "FIADO" else "PAGADO"
+
                 val nuevaVenta = Venta(
                     montoTotal = totalMonto,
+                    costoTotal = 0.0,
                     metodoPago = metodo,
+                    estadoPago = estado, // <--- Aquí ya no será null
                     prestaPlato = prestaPlato,
-                    clienteId = clienteId
+                    clienteId = clienteId,
+                    fecha = ventasRepository.obtenerFechaHoy()
                 )
 
                 coroutineScope.launch {
@@ -272,14 +270,13 @@ fun MenuComida(platosActivos: Set<String>, alAgregarAlCarrito: (ItemCarrito) -> 
     val platosMaestros = listOf(
         "Tallarín" to 5.0,
         "Caldo de Pollo" to 5.0,
-        "Salchipollo" to 5.0,
+        "Salchipollo" to 10.0,
         "Trigo con papa" to 5.0,
         "Patita" to 7.0,
         "Orejita" to 7.0,
         "Padrastro" to 7.0
     )
 
-    // 👇 Aplicamos el filtro: Solo dejamos pasar los que se marcaron en la apertura
     val platosDeHoy = platosMaestros.filter { platosActivos.contains(it.first) }
 
     if (platosDeHoy.isEmpty()) {
@@ -298,7 +295,9 @@ fun MenuCafeteria(alAgregarAlCarrito: (ItemCarrito) -> Unit) {
         "Capuchino" to 5.0,
         "Latte" to 5.0,
         "Frapuchino" to 7.0,
-        "Espresso Martini" to 10.0
+        "Moccachino" to 5.0,
+        "Caramel Macchiato" to 5.0,
+        "Café Bombón" to 5.0
     )
     GridProductos(cafes, alAgregarAlCarrito)
 }
@@ -306,10 +305,12 @@ fun MenuCafeteria(alAgregarAlCarrito: (ItemCarrito) -> Unit) {
 @Composable
 fun MenuBebidas(alAgregarAlCarrito: (ItemCarrito) -> Unit) {
     val bebidas = listOf(
-        "Gordita Inca Kola" to 3.5,
+        "Maracuyá" to 2.0,
+        "Chicha Morada" to 2.0,
+        "Gordita" to 4.0,
         "Inca 1L" to 5.0,
-        "Pepsi 2L" to 6.0,
-        "Chicha Morada" to 2.5
+        "Coca Cola" to 5.0,
+        "Pepsi 2L" to 6.0
     )
     GridProductos(bebidas, alAgregarAlCarrito)
 }
@@ -449,12 +450,13 @@ fun DialogoPago(
                 Text(text = "Método de Pago:", fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // Cambia esto en DialogoPago dentro de VentaScreen.kt
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     BotonMetodoPago("Efectivo", metodoSeleccionado) { metodoSeleccionado = it }
-                    BotonMetodoPago("Yape/Plin", metodoSeleccionado) { metodoSeleccionado = it }
+                    BotonMetodoPago("Yape", metodoSeleccionado) { metodoSeleccionado = it }
                     BotonMetodoPago("Fiado", metodoSeleccionado) { metodoSeleccionado = it }
                 }
 

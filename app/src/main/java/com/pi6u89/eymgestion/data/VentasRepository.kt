@@ -12,6 +12,7 @@ import java.util.Locale
 
 class VentasRepository {
 
+    // --- FUNCIONES DE REGISTRO ---
     suspend fun registrarVenta(venta: Venta): Boolean {
         return withContext(Dispatchers.IO) {
             try {
@@ -24,7 +25,6 @@ class VentasRepository {
         }
     }
 
-    // NUEVO: Función para registrar la deuda
     suspend fun registrarFiado(fiado: Fiado): Boolean {
         return withContext(Dispatchers.IO) {
             try {
@@ -37,7 +37,6 @@ class VentasRepository {
         }
     }
 
-    // NUEVO: Función para registrar la vajilla prestada
     suspend fun registrarPlatoPrestado(plato: PlatoPrestado): Boolean {
         return withContext(Dispatchers.IO) {
             try {
@@ -50,23 +49,86 @@ class VentasRepository {
         }
     }
 
-    // Herramienta auxiliar para la fecha (Ej: "2026-05-21")
-    fun obtenerFechaHoy(): String {
-        return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-    }
-    // Descarga solo las ventas realizadas el día de hoy
-    suspend fun obtenerVentasDeHoy(): List<Venta> {
-        val hoy = obtenerFechaHoy()
+    // --- FUNCIONES DE CONSULTA ---
+    // He unificado a esta versión que es más estable si tu columna es tipo 'date'
+    suspend fun obtenerVentasPorFecha(fecha: String): List<Venta> {
         return withContext(Dispatchers.IO) {
             try {
-                SupabaseClient.client.postgrest["ventas"]
-                    .select { filter { eq("fecha", hoy) } }
+                // Buscamos coincidencia exacta por el string de fecha (ej: "2026-05-21")
+                val ventas = SupabaseClient.client.postgrest["ventas"]
+                    .select {
+                        filter { eq("fecha", fecha) }
+                    }
                     .decodeList<Venta>()
+
+                android.util.Log.d("DEBUG_REPO", "Ventas encontradas para $fecha: ${ventas.size}")
+                ventas
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("VENTAS_REPO", "Error al traer ventas: ${e.message}")
                 emptyList()
             }
         }
     }
 
+    suspend fun obtenerVentasPorRango(fechaInicio: String, fechaFin: String): List<Venta> {
+        return withContext(Dispatchers.IO) {
+            try {
+                SupabaseClient.client.postgrest["ventas"]
+                    .select {
+                        filter {
+                            gte("fecha", fechaInicio)
+                            lte("fecha", fechaFin)
+                        }
+                    }
+                    .decodeList<Venta>()
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+    }
+
+    suspend fun obtenerReporteCierreDeCaja(fecha: String): ReporteCierre {
+        val ventas = obtenerVentasPorFecha(fecha)
+
+        return ReporteCierre(
+            // Si el estado es null, usamos "PAGADO" por defecto
+            ventasEfectivo = ventas.filter {
+                it.metodoPago.trim().equals("Efectivo", true) &&
+                        (it.estadoPago ?: "PAGADO").trim().equals("PAGADO", true)
+            }.sumOf { it.montoTotal },
+
+            ventasYape = ventas.filter {
+                it.metodoPago.trim().equals("Yape", true) &&
+                        (it.estadoPago ?: "PAGADO").trim().equals("PAGADO", true)
+            }.sumOf { it.montoTotal },
+
+            ventasPlin = ventas.filter {
+                it.metodoPago.trim().equals("Plin", true) &&
+                        (it.estadoPago ?: "PAGADO").trim().equals("PAGADO", true)
+            }.sumOf { it.montoTotal },
+
+            ventasFiadas = ventas.filter {
+                (it.estadoPago ?: "").trim().equals("FIADO", true)
+            }.sumOf { it.montoTotal }
+        )
+    }
+
+    // --- ESTRUCTURAS DE DATOS ---
+    data class ReporteCierre(
+        val ventasEfectivo: Double,
+        val ventasYape: Double,
+        val ventasPlin: Double,
+        val ventasFiadas: Double
+    ) {
+        val totalRecaudado: Double get() = ventasEfectivo + ventasYape + ventasPlin
+        val totalGeneral: Double get() = totalRecaudado + ventasFiadas
+    }
+
+    fun obtenerFechaHoy(): String {
+        return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+    }
+
+    suspend fun obtenerVentasDeHoy(): List<Venta> {
+        return obtenerVentasPorFecha(obtenerFechaHoy())
+    }
 }

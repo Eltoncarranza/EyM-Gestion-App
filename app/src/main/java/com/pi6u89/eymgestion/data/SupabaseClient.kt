@@ -15,7 +15,16 @@ object SupabaseClient {
         supabaseUrl = SUPABASE_URL,
         supabaseKey = SUPABASE_KEY
     ) {
-        install(Postgrest)
+        install(Postgrest) {
+            // Opcional: configurar la serialización aquí si es necesario
+        }
         install(Realtime)
     }
+
+    // Configuración adicional del serializador JSON
+    val json = kotlinx.serialization.json.Json {
+        ignoreUnknownKeys = true
+        coerceInputValues = true // <--- ESTO ES LO MÁS IMPORTANTE
+    }
+
 }
