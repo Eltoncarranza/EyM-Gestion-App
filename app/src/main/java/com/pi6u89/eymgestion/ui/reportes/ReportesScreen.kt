@@ -11,15 +11,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pi6u89.eymgestion.data.CajaManager
 import com.pi6u89.eymgestion.data.VentasRepository
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import kotlinx.coroutines.launch
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
@@ -30,66 +31,84 @@ fun ReportesScreen() {
     val coroutineScope = rememberCoroutineScope()
 
     val cajaAbierta by cajaManager.cajaAbiertaFlow.collectAsState(initial = false)
-    var fechaActual by remember { mutableStateOf(java.time.LocalDate.now()) }
+
+    // Estado de la pantalla
+    var fechaActual by remember { mutableStateOf(LocalDate.now()) }
     var reporte by remember { mutableStateOf<VentasRepository.ReporteCierre?>(null) }
-    var cantidadVentasTotal by remember { mutableStateOf(0) } // Para debug
     var cargando by remember { mutableStateOf(true) }
     var mostrarConfirmacionCierre by remember { mutableStateOf(false) }
 
+    // Función para cargar datos
     val cargarDatos = {
         coroutineScope.launch {
             cargando = true
-            val fechaStr = fechaActual.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"))
-            val todasLasVentas = ventasRepository.obtenerVentasPorFecha(fechaStr)
-            cantidadVentasTotal = todasLasVentas.size
+            val fechaStr = fechaActual.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
             reporte = ventasRepository.obtenerReporteCierreDeCaja(fechaStr)
             cargando = false
         }
     }
 
-    LaunchedEffect(fechaActual) { cargarDatos() }
+    // Recargar datos cada vez que cambia la fecha
+    LaunchedEffect(fechaActual) {
+        cargarDatos()
+    }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
-        // Navegador de Fechas
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { fechaActual = fechaActual.minusDays(1) }) { Icon(Icons.Default.ArrowBack, null) }
-            Text(fechaActual.toString(), fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            IconButton(onClick = { fechaActual = fechaActual.plusDays(1) }) { Icon(Icons.Default.ArrowForward, null) }
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Text("Reportes Financieros", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+
+        // --- NAVEGACIÓN POR FECHAS ---
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = { fechaActual = fechaActual.minusDays(1) }) {
+                Icon(Icons.Default.ChevronLeft, "Día anterior")
+            }
+            Text(fechaActual.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")), style = MaterialTheme.typography.titleLarge)
+            IconButton(onClick = { fechaActual = fechaActual.plusDays(1) }) {
+                Icon(Icons.Default.ChevronRight, "Día siguiente")
+            }
         }
 
+        // --- PANTALLA DE CARGA ---
         if (cargando) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
         } else {
-            // TARJETA DE DEBUG (Para ver si llegan ventas aunque sea a 0)
-            Text("Ventas encontradas en DB: $cantidadVentasTotal", fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
-
-            reporte?.let {
-                // Tarjeta Total
-                Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-                    Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("TOTAL RECAUDADO", fontWeight = FontWeight.SemiBold)
-                        Text("S/. ${it.totalGeneral}", fontSize = 36.sp, fontWeight = FontWeight.ExtraBold)
+            // --- CONTENIDO ---
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()).weight(1f)) {
+                reporte?.let {
+                    // Tarjeta Principal (Total)
+                    ElevatedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                    ) {
+                        Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("TOTAL RECAUDADO", style = MaterialTheme.typography.labelLarge)
+                            Text("S/. ${it.totalGeneral}", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold)
+                        }
                     }
-                }
 
-                // Desglose
-                // DESGLOSE CANALES
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // He añadido el icono correspondiente a cada tarjeta
-                    TarjetaDato("Efectivo", it.ventasEfectivo, Icons.Default.Payments, Modifier.weight(1f))
-                    TarjetaDato("Yape", it.ventasYape, Icons.Default.PhoneAndroid, Modifier.weight(1f))
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TarjetaDato("Plin", it.ventasPlin, Icons.Default.QrCode, Modifier.weight(1f))
-                    TarjetaDato("Fiado", it.ventasFiadas, Icons.Default.Warning, Modifier.weight(1f))
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Desglose Grid
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        TarjetaDato("Efectivo", it.ventasEfectivo, Icons.Default.Payments, Modifier.weight(1f))
+                        TarjetaDato("Yape", it.ventasYape, Icons.Default.Smartphone, Modifier.weight(1f))
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        TarjetaDato("Plin", it.ventasPlin, Icons.Default.QrCode, Modifier.weight(1f))
+                        TarjetaDato("Fiado", it.ventasFiadas, Icons.Default.Warning, Modifier.weight(1f))
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // BOTÓN DE CIERRE
-            if (cajaAbierta) {
+            // --- BOTÓN CIERRE (Solo si es hoy y la caja está abierta) ---
+            if (cajaAbierta && fechaActual == LocalDate.now()) {
+                Spacer(modifier = Modifier.height(16.dp))
                 Button(
                     onClick = { mostrarConfirmacionCierre = true },
                     modifier = Modifier.fillMaxWidth().height(56.dp),
@@ -97,17 +116,18 @@ fun ReportesScreen() {
                 ) {
                     Icon(Icons.Default.Lock, null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("CERRAR JORNADA", fontWeight = FontWeight.Bold)
+                    Text("CERRAR JORNADA", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
     }
 
+    // Confirmación
     if (mostrarConfirmacionCierre) {
         AlertDialog(
             onDismissRequest = { mostrarConfirmacionCierre = false },
             title = { Text("¿Cerrar Caja?") },
-            text = { Text("Al cerrar la caja, la jornada terminará. ¿Continuar?") },
+            text = { Text("Se bloquearán nuevas ventas hasta mañana.") },
             confirmButton = {
                 Button(onClick = { coroutineScope.launch { cajaManager.cerrarCaja(); mostrarConfirmacionCierre = false } }) { Text("Sí, Cerrar") }
             },
@@ -117,18 +137,13 @@ fun ReportesScreen() {
 }
 
 @Composable
-fun TarjetaDato(
-    titulo: String,
-    monto: Double,
-    icono: androidx.compose.ui.graphics.vector.ImageVector, // El icono va aquí
-    modifier: Modifier
-) {
+fun TarjetaDato(titulo: String, monto: Double, icono: ImageVector, modifier: Modifier) {
     Card(modifier = modifier, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(icono, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(8.dp))
             Text(titulo, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-            Text("S/. $monto", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text("S/. $monto", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         }
     }
 }
