@@ -1,5 +1,7 @@
 package com.pi6u89.eymgestion.ui.fiados
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,7 +21,9 @@ import com.pi6u89.eymgestion.domain.Cliente
 import com.pi6u89.eymgestion.domain.Fiado
 import com.pi6u89.eymgestion.domain.PlatoPrestado
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FiadosScreen() {
@@ -32,11 +36,13 @@ fun FiadosScreen() {
 
     var cargando by remember { mutableStateOf(true) }
     var mostrarDialogoNuevoCliente by remember { mutableStateOf(false) }
-
-    // Estado para saber qué cliente se seleccionó para ver sus detalles
     var clienteParaDetalle by remember { mutableStateOf<Cliente?>(null) }
 
-    // Función reutilizable para recargar todos los datos desde Supabase
+    // --- ESTADOS PARA EL DIÁLOGO DE CONFIRMACIÓN DE COBRO ---
+    var mostrarDialogoMetodoPago by remember { mutableStateOf(false) }
+    var metodoSeleccionado by remember { mutableStateOf("Efectivo") }
+    var procesandoPago by remember { mutableStateOf(false) }
+
     val cargarDatos = {
         coroutineScope.launch {
             cargando = true
@@ -53,7 +59,10 @@ fun FiadosScreen() {
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(onClick = { mostrarDialogoNuevoCliente = true }) {
+            FloatingActionButton(
+                onClick = { mostrarDialogoNuevoCliente = true },
+                containerColor = MaterialTheme.colorScheme.primary
+            ) {
                 Icon(Icons.Default.Add, contentDescription = "Agregar Cliente")
             }
         }
@@ -68,9 +77,13 @@ fun FiadosScreen() {
             Spacer(modifier = Modifier.height(16.dp))
 
             if (cargando) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
             } else if (clientes.isEmpty()) {
-                Text("Aún no tienes clientes registrados.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Aún no tienes clientes registrados.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(clientes) { cliente ->
@@ -80,8 +93,9 @@ fun FiadosScreen() {
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { clienteParaDetalle = cliente }, // 👈 AHORA ES CLICKABLE
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                                .clickable { clienteParaDetalle = cliente },
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                         ) {
                             Row(
                                 modifier = Modifier.padding(16.dp).fillMaxWidth(),
@@ -89,7 +103,7 @@ fun FiadosScreen() {
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(40.dp))
+                                    Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
                                     Spacer(modifier = Modifier.width(16.dp))
                                     Column {
                                         Text(text = cliente.nombre, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
@@ -118,7 +132,7 @@ fun FiadosScreen() {
         }
     }
 
-    // VENTANA EMERGENTE: DETALLE DE DEUDAS Y PLATOS PRESTADOS
+    // --- DIÁLOGO 1: CUENTA GENERAL DEL CLIENTE ---
     clienteParaDetalle?.let { cliente ->
         val deudasCliente = listaFiados.filter { it.clienteId == cliente.id }
         val platosCliente = listaPlatos.filter { it.clienteId == cliente.id }
@@ -131,26 +145,20 @@ fun FiadosScreen() {
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // --- SECCIÓN MONETARIA ---
-                    Text(text = "💰 Dinero Adeudado:", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    // SECCIÓN DINERO
+                    Text(text = "💰 Dinero Adeudado", fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = MaterialTheme.colorScheme.error)
                     if (deudasCliente.isEmpty()) {
                         Text("No registra deudas de dinero.", color = MaterialTheme.colorScheme.secondary)
                     } else {
                         Text(
                             text = "Total Pendiente: S/. ${deudasCliente.sumOf { it.monto }}",
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.error,
                             fontSize = 18.sp
                         )
                         Button(
                             onClick = {
-                                coroutineScope.launch {
-                                    val ok = clienteRepository.liquidarDeudaCliente(cliente.id)
-                                    if (ok) {
-                                        clienteParaDetalle = null
-                                        cargarDatos() // Recarga la lista en vivo
-                                    }
-                                }
+                                // En lugar de borrar directo, pasamos al flujo de selección de método de pago
+                                mostrarDialogoMetodoPago = true
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                             modifier = Modifier.fillMaxWidth()
@@ -159,28 +167,26 @@ fun FiadosScreen() {
                         }
                     }
 
-                    Divider(modifier = Modifier.padding(vertical = 4.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                    // --- SECCIÓN MÁGICA DE PLATOS PRESTADOS ---
-                    Text(text = "🍲 Vajilla Prestada Detallada:", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    // SECCIÓN VAJILLA
+                    Text(text = "🍲 Vajilla Prestada", fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = MaterialTheme.colorScheme.primary)
                     if (platosCliente.isEmpty()) {
                         Text("No tiene platos prestados.", color = MaterialTheme.colorScheme.secondary)
                     } else {
                         Text(
-                            text = "Total Platos Pendientes: ${platosCliente.sumOf { it.cantidadPlatos }}",
+                            text = "Platos Pendientes: ${platosCliente.sumOf { it.cantidadPlatos }}",
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
                             fontSize = 16.sp
                         )
 
-                        // Historial interno de platos llevados
                         Column(
                             modifier = Modifier.fillMaxWidth().padding(start = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             platosCliente.forEach { registro ->
                                 Text(
-                                    text = "• ${registro.cantidadPlatos} platos lentos el día ${registro.fechaPrestamo}",
+                                    text = "• ${registro.cantidadPlatos} platos el día ${registro.fechaPrestamo}",
                                     fontSize = 14.sp
                                 )
                             }
@@ -200,7 +206,7 @@ fun FiadosScreen() {
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Registrar Devolución de Vajilla")
+                            Text("Registrar Devolución")
                         }
                     }
                 }
@@ -211,7 +217,79 @@ fun FiadosScreen() {
         )
     }
 
-    // Ventana emergente para registrar un nuevo cliente
+    // --- DIÁLOGO 2: ASISTENTE OBLIGATORIO DE COBRO Y MÉTODO DE PAGO ---
+    if (mostrarDialogoMetodoPago && clienteParaDetalle != null) {
+        val totalMontoCobro = listaFiados.filter { it.clienteId == clienteParaDetalle!!.id }.sumOf { it.monto }
+
+        AlertDialog(
+            onDismissRequest = { if (!procesandoPago) mostrarDialogoMetodoPago = false },
+            title = { Text("Registrar Ingreso de Caja", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Se registrará la liquidación de deuda para **${clienteParaDetalle!!.nombre}**.")
+                    Text("Monto Total a Recaudar: **S/. $totalMontoCobro**", fontSize = 16.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Selecciona cómo se recibió el dinero:", fontWeight = FontWeight.SemiBold)
+
+                    val opcionesPago = listOf("Efectivo", "Yape", "Plin")
+                    opcionesPago.forEach { opcion ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { if (!procesandoPago) metodoSeleccionado = opcion }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = (metodoSeleccionado == opcion),
+                                onClick = { if (!procesandoPago) metodoSeleccionado = opcion }
+                            )
+                            Text(text = opcion, modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = !procesandoPago,
+                    onClick = {
+                        coroutineScope.launch {
+                            procesandoPago = true
+                            val fechaHoy = LocalDate.now().toString() // Genera YYYY-MM-DD
+
+                            // LLAMADA CORREGIDA: Ahora solo pasamos el ID, el método y la fecha
+                            val exito = clienteRepository.liquidarDeudaConPago(
+                                clienteId = clienteParaDetalle!!.id,
+                                metodoPago = metodoSeleccionado,
+                                fechaHoy = fechaHoy
+                            )
+
+                            if (exito) {
+                                mostrarDialogoMetodoPago = false
+                                clienteParaDetalle = null // Cierra la ficha de detalles
+                                cargarDatos() // Recarga la lista en vivo limpiando la pantalla
+                            }
+                            procesandoPago = false
+                        }
+                    }
+                ) {
+                    if (procesandoPago) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
+                    } else {
+                        Text("Confirmar Pago")
+                    }
+                }
+
+            },
+            dismissButton = {
+                if (!procesandoPago) {
+                    TextButton(onClick = { mostrarDialogoMetodoPago = false }) { Text("Cancelar") }
+                }
+            }
+        )
+    }
+
+    // --- DIÁLOGO 3: NUEVO CLIENTE ---
     if (mostrarDialogoNuevoCliente) {
         var nombreNuevo by remember { mutableStateOf("") }
         var telefonoNuevo by remember { mutableStateOf("") }

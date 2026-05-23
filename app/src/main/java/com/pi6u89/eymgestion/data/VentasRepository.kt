@@ -131,4 +131,38 @@ class VentasRepository {
     suspend fun obtenerVentasDeHoy(): List<Venta> {
         return obtenerVentasPorFecha(obtenerFechaHoy())
     }
+
+    // --- FUNCIÓN PARA OBTENER TODAS LAS DEUDAS (FIADOS) ---
+    suspend fun obtenerTodosLosFiados(): List<Fiado> {
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                // Trae todos los registros de la tabla fiados
+                SupabaseClient.client.postgrest["fiados"]
+                    .select()
+                    .decodeList<Fiado>()
+            } catch (e: Exception) {
+                android.util.Log.e("VENTAS_REPO", "Error al obtener fiados: ${e.message}")
+                emptyList()
+            }
+        }
+    }
+    suspend fun procesarPagoDeFiado(fiadoId: Int, ventaEquivalente: Venta): Boolean {
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                // 1. Insertamos la deuda como una venta PAGADA para que sume a los reportes de hoy
+                SupabaseClient.client.postgrest["ventas"].insert(ventaEquivalente)
+
+                // 2. Eliminamos el registro de la tabla de fiados (deudas)
+                SupabaseClient.client.postgrest["fiados"].delete {
+                    filter {
+                        eq("id", fiadoId)
+                    }
+                }
+                true
+            } catch (e: Exception) {
+                android.util.Log.e("VENTAS_REPO", "Error al procesar pago de fiado: ${e.message}")
+                false
+            }
+        }
+    }
 }
