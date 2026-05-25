@@ -239,7 +239,7 @@ fun VistaPuntoDeVenta(listaClientes: List<Cliente>, platosActivos: Set<String>) 
                     montoTotal = totalMonto,
                     costoTotal = 0.0,
                     metodoPago = metodo,
-                    estadoPago = estado, // <--- Aquí ya no será null
+                    estadoPago = estado,
                     prestaPlato = prestaPlato,
                     clienteId = clienteId,
                     fecha = ventasRepository.obtenerFechaHoy()

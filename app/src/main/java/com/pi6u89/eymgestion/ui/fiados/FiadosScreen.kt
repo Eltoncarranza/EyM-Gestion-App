@@ -38,7 +38,6 @@ fun FiadosScreen() {
     var mostrarDialogoNuevoCliente by remember { mutableStateOf(false) }
     var clienteParaDetalle by remember { mutableStateOf<Cliente?>(null) }
 
-    // --- ESTADOS PARA EL DIÁLOGO DE CONFIRMACIÓN DE COBRO ---
     var mostrarDialogoMetodoPago by remember { mutableStateOf(false) }
     var metodoSeleccionado by remember { mutableStateOf("Efectivo") }
     var procesandoPago by remember { mutableStateOf(false) }
@@ -132,7 +131,6 @@ fun FiadosScreen() {
         }
     }
 
-    // --- DIÁLOGO 1: CUENTA GENERAL DEL CLIENTE ---
     clienteParaDetalle?.let { cliente ->
         val deudasCliente = listaFiados.filter { it.clienteId == cliente.id }
         val platosCliente = listaPlatos.filter { it.clienteId == cliente.id }
@@ -145,7 +143,6 @@ fun FiadosScreen() {
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // SECCIÓN DINERO
                     Text(text = "💰 Dinero Adeudado", fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = MaterialTheme.colorScheme.error)
                     if (deudasCliente.isEmpty()) {
                         Text("No registra deudas de dinero.", color = MaterialTheme.colorScheme.secondary)
@@ -157,7 +154,6 @@ fun FiadosScreen() {
                         )
                         Button(
                             onClick = {
-                                // En lugar de borrar directo, pasamos al flujo de selección de método de pago
                                 mostrarDialogoMetodoPago = true
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
@@ -169,7 +165,6 @@ fun FiadosScreen() {
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                    // SECCIÓN VAJILLA
                     Text(text = "🍲 Vajilla Prestada", fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = MaterialTheme.colorScheme.primary)
                     if (platosCliente.isEmpty()) {
                         Text("No tiene platos prestados.", color = MaterialTheme.colorScheme.secondary)
@@ -217,7 +212,6 @@ fun FiadosScreen() {
         )
     }
 
-    // --- DIÁLOGO 2: ASISTENTE OBLIGATORIO DE COBRO Y MÉTODO DE PAGO ---
     if (mostrarDialogoMetodoPago && clienteParaDetalle != null) {
         val totalMontoCobro = listaFiados.filter { it.clienteId == clienteParaDetalle!!.id }.sumOf { it.monto }
 
@@ -255,9 +249,8 @@ fun FiadosScreen() {
                     onClick = {
                         coroutineScope.launch {
                             procesandoPago = true
-                            val fechaHoy = LocalDate.now().toString() // Genera YYYY-MM-DD
+                            val fechaHoy = LocalDate.now().toString()
 
-                            // LLAMADA CORREGIDA: Ahora solo pasamos el ID, el método y la fecha
                             val exito = clienteRepository.liquidarDeudaConPago(
                                 clienteId = clienteParaDetalle!!.id,
                                 metodoPago = metodoSeleccionado,
@@ -266,8 +259,8 @@ fun FiadosScreen() {
 
                             if (exito) {
                                 mostrarDialogoMetodoPago = false
-                                clienteParaDetalle = null // Cierra la ficha de detalles
-                                cargarDatos() // Recarga la lista en vivo limpiando la pantalla
+                                clienteParaDetalle = null
+                                cargarDatos()
                             }
                             procesandoPago = false
                         }
@@ -289,7 +282,6 @@ fun FiadosScreen() {
         )
     }
 
-    // --- DIÁLOGO 3: NUEVO CLIENTE ---
     if (mostrarDialogoNuevoCliente) {
         var nombreNuevo by remember { mutableStateOf("") }
         var telefonoNuevo by remember { mutableStateOf("") }

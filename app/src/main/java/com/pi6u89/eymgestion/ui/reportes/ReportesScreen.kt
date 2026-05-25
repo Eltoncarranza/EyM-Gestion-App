@@ -32,13 +32,11 @@ fun ReportesScreen() {
 
     val cajaAbierta by cajaManager.cajaAbiertaFlow.collectAsState(initial = false)
 
-    // Estado de la pantalla
     var fechaActual by remember { mutableStateOf(LocalDate.now()) }
     var reporte by remember { mutableStateOf<VentasRepository.ReporteCierre?>(null) }
     var cargando by remember { mutableStateOf(true) }
     var mostrarConfirmacionCierre by remember { mutableStateOf(false) }
 
-    // Función para cargar datos
     val cargarDatos = {
         coroutineScope.launch {
             cargando = true
@@ -48,7 +46,6 @@ fun ReportesScreen() {
         }
     }
 
-    // Recargar datos cada vez que cambia la fecha
     LaunchedEffect(fechaActual) {
         cargarDatos()
     }
@@ -56,7 +53,6 @@ fun ReportesScreen() {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("Reportes Financieros", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
 
-        // --- NAVEGACIÓN POR FECHAS ---
         Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -71,13 +67,12 @@ fun ReportesScreen() {
             }
         }
 
-        // --- PANTALLA DE CARGA ---
         if (cargando) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
         } else {
-            // --- CONTENIDO ---
+
             Column(modifier = Modifier.verticalScroll(rememberScrollState()).weight(1f)) {
                 reporte?.let {
                     // Tarjeta Principal (Total)
@@ -93,7 +88,6 @@ fun ReportesScreen() {
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Desglose Grid
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         TarjetaDato("Efectivo", it.ventasEfectivo, Icons.Default.Payments, Modifier.weight(1f))
                         TarjetaDato("Yape", it.ventasYape, Icons.Default.Smartphone, Modifier.weight(1f))
@@ -106,7 +100,6 @@ fun ReportesScreen() {
                 }
             }
 
-            // --- BOTÓN CIERRE (Solo si es hoy y la caja está abierta) ---
             if (cajaAbierta && fechaActual == LocalDate.now()) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
@@ -122,7 +115,6 @@ fun ReportesScreen() {
         }
     }
 
-    // Confirmación
     if (mostrarConfirmacionCierre) {
         AlertDialog(
             onDismissRequest = { mostrarConfirmacionCierre = false },

@@ -9,5 +9,5 @@ data class PlatoPrestado(
     @SerialName("cliente_id") val clienteId: Int,
     @SerialName("cantidad_platos") val cantidadPlatos: Int,
     @SerialName("fecha_prestamo") val fechaPrestamo: String,
-    val devuelto: Boolean = false // Para saber si ya nos trajo la vajilla
+    val devuelto: Boolean = false
 )

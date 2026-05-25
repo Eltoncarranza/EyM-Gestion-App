@@ -11,13 +11,13 @@ data class Venta(
     val montoTotal: Double,
 
     @SerialName("costo_total")
-    val costoTotal: Double? = 0.0, // <-- Cambiado a Double? y valor por defecto
+    val costoTotal: Double? = 0.0,
 
     @SerialName("metodo_pago")
     val metodoPago: String,
 
     @SerialName("estado_pago")
-    val estadoPago: String? = "PAGADO", // <-- Cambiado a String? y valor por defecto
+    val estadoPago: String? = "PAGADO",
 
     @SerialName("presta_plato")
     val prestaPlato: Boolean = false,

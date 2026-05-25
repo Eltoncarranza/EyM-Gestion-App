@@ -11,18 +11,17 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// --- CLASES AUXILIARES PARA ACTUALIZAR SIN ERRORES DE JSON ---
 @Serializable
 data class EstadoPagoUpdate(val pagado: Boolean)
 @Serializable
 data class LiquidarVentaUpdate(
     @SerialName("metodo_pago") val metodoPago: String,
     @SerialName("estado_pago") val estadoPago: String,
-    val fecha: String // Movemos la venta al día de hoy para que sume al efectivo real en caja
+    val fecha: String
 )
 @Serializable
 data class EstadoPlatoUpdate(val devuelto: Boolean)
-// -----------------------------------------------------------
+
 
 class ClienteRepository {
 
@@ -80,8 +79,6 @@ class ClienteRepository {
     suspend fun liquidarDeudaConPago(clienteId: Int, metodoPago: String, fechaHoy: String): Boolean {
         return withContext(Dispatchers.IO) {
             try {
-                // 1. ACTUALIZAMOS las ventas existentes que estaban pendientes de pago
-                // Esto evita duplicados y limpia los reportes antiguos de fiados
                 SupabaseClient.client.postgrest["ventas"]
                     .update(LiquidarVentaUpdate(metodoPago = metodoPago, estadoPago = "PAGADO", fecha = fechaHoy)) {
                         filter {
@@ -90,7 +87,6 @@ class ClienteRepository {
                         }
                     }
 
-                // 2. Marcamos los fiados de este cliente como pagados en la tabla fiados
                 SupabaseClient.client.postgrest["fiados"]
                     .update(EstadoPagoUpdate(pagado = true)) {
                         filter { eq("cliente_id", clienteId) }
@@ -104,7 +100,6 @@ class ClienteRepository {
         }
     }
 
-    // --- FUNCIÓN CORREGIDA ---
     suspend fun registrarDevolucionPlatos(clienteId: Int): Boolean {
         return withContext(Dispatchers.IO) {
             try {

@@ -11,13 +11,13 @@ val Typography = Typography(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Bold,
         fontSize = 28.sp
-        // Eliminamos el color aquí
+
     ),
     bodyMedium = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp
-        // Eliminamos el color aquí
+
     ),
     labelLarge = TextStyle(
         fontFamily = FontFamily.Default,

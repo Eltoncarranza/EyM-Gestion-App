@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class Cliente(
-    val id: Int = 0, // Generado por Supabase
+    val id: Int = 0,
     val nombre: String,
-    val telefono: String = "" // Opcional, por si quieres mandarle WhatsApp
+    val telefono: String = ""
 )

@@ -1,5 +1,7 @@
 package com.pi6u89.eymgestion.ui.main
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -14,11 +16,10 @@ import com.pi6u89.eymgestion.ui.reportes.ReportesScreen
 import com.pi6u89.eymgestion.ui.compras.ComprasScreen
 import com.pi6u89.eymgestion.ui.venta.VentaScreen
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun MainScreen() {
-    // Controlador de navegación interno para las pestañas de abajo
     val bottomNavController = rememberNavController()
-    // Variable para saber en qué pestaña estamos
     var rutaActual by remember { mutableStateOf("venta") }
 
     Scaffold(
@@ -65,7 +66,6 @@ fun MainScreen() {
             }
         }
     ) { paddingValues ->
-        // Aquí se dibuja la pantalla seleccionada
         NavHost(
             navController = bottomNavController,
             startDestination = "venta",

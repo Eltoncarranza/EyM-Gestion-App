@@ -12,7 +12,6 @@ import java.util.Locale
 
 class VentasRepository {
 
-    // --- FUNCIONES DE REGISTRO ---
     suspend fun registrarVenta(venta: Venta): Boolean {
         return withContext(Dispatchers.IO) {
             try {
@@ -49,8 +48,6 @@ class VentasRepository {
         }
     }
 
-    // --- FUNCIONES DE CONSULTA ---
-    // He unificado a esta versión que es más estable si tu columna es tipo 'date'
     suspend fun obtenerVentasPorFecha(fecha: String): List<Venta> {
         return withContext(Dispatchers.IO) {
             try {
@@ -91,7 +88,6 @@ class VentasRepository {
         val ventas = obtenerVentasPorFecha(fecha)
 
         return ReporteCierre(
-            // Si el estado es null, usamos "PAGADO" por defecto
             ventasEfectivo = ventas.filter {
                 it.metodoPago.trim().equals("Efectivo", true) &&
                         (it.estadoPago ?: "PAGADO").trim().equals("PAGADO", true)
@@ -113,7 +109,6 @@ class VentasRepository {
         )
     }
 
-    // --- ESTRUCTURAS DE DATOS ---
     data class ReporteCierre(
         val ventasEfectivo: Double,
         val ventasYape: Double,
@@ -132,7 +127,6 @@ class VentasRepository {
         return obtenerVentasPorFecha(obtenerFechaHoy())
     }
 
-    // --- FUNCIÓN PARA OBTENER TODAS LAS DEUDAS (FIADOS) ---
     suspend fun obtenerTodosLosFiados(): List<Fiado> {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             try {
@@ -149,10 +143,8 @@ class VentasRepository {
     suspend fun procesarPagoDeFiado(fiadoId: Int, ventaEquivalente: Venta): Boolean {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             try {
-                // 1. Insertamos la deuda como una venta PAGADA para que sume a los reportes de hoy
                 SupabaseClient.client.postgrest["ventas"].insert(ventaEquivalente)
 
-                // 2. Eliminamos el registro de la tabla de fiados (deudas)
                 SupabaseClient.client.postgrest["fiados"].delete {
                     filter {
                         eq("id", fiadoId)

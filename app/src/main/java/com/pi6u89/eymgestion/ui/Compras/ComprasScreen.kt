@@ -43,8 +43,6 @@ fun ComprasScreen() {
     }
 
     LaunchedEffect(Unit) { cargarDatos() }
-
-    // Separamos la lista en dos grupos en tiempo real
     val pendientes = listaItems.filter { !it.comprado }
     val comprados = listaItems.filter { it.comprado }
 
@@ -71,7 +69,6 @@ fun ComprasScreen() {
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // --- SECCIÓN 1: PENDIENTES ---
                     item {
                         Text(text = "📌 Pendientes para el próximo mercado", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
                     }
@@ -91,7 +88,6 @@ fun ComprasScreen() {
                                         Text(text = "Cantidad: ${item.cantidad}", fontSize = 14.sp)
                                     }
                                     Row {
-                                        // Botón verde para registrar que ya lo compraste y poner el costo
                                         IconButton(onClick = { itemParaComprar = item }) {
                                             Icon(Icons.Default.Check, contentDescription = "Comprado", tint = MaterialTheme.colorScheme.primary)
                                         }
@@ -109,7 +105,6 @@ fun ComprasScreen() {
                         }
                     }
 
-                    // --- SECCIÓN 2: HISTORIAL DE COMPRAS/GASTOS ---
                     item {
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(text = "✅ Registro de Gastos Realizados", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
@@ -142,7 +137,6 @@ fun ComprasScreen() {
         }
     }
 
-    // DIÁLOGO 1: APUNTAR ALGO QUE FALTA
     if (mostrarDialogoAgregar) {
         var prod by remember { mutableStateOf("") }
         var cant by remember { mutableStateOf("") }
@@ -171,7 +165,6 @@ fun ComprasScreen() {
         )
     }
 
-    // DIÁLOGO 2: REGISTRAR EL COSTO DE LO COMPRADO
     itemParaComprar?.let { item ->
         var costoInput by remember { mutableStateOf("") }
 

@@ -7,7 +7,6 @@ import kotlinx.coroutines.withContext
 
 class ComprasRepository {
 
-    // Descarga toda la lista de compras del día o histórico
     suspend fun obtenerListaCompras(): List<ItemCompra> {
         return withContext(Dispatchers.IO) {
             try {
@@ -21,7 +20,6 @@ class ComprasRepository {
         }
     }
 
-    // Agrega un insumo que falta para el día siguiente
     suspend fun agregarItem(item: ItemCompra): Boolean {
         return withContext(Dispatchers.IO) {
             try {
@@ -34,7 +32,6 @@ class ComprasRepository {
         }
     }
 
-    // Registra el costo final y cambia el estado a comprado = true
     suspend fun marcarComoComprado(id: Int, costoFinal: Double): Boolean {
         return withContext(Dispatchers.IO) {
             try {
@@ -50,7 +47,6 @@ class ComprasRepository {
         }
     }
 
-    // Elimina un producto de la lista
     suspend fun eliminarItem(id: Int): Boolean {
         return withContext(Dispatchers.IO) {
             try {
@@ -64,7 +60,6 @@ class ComprasRepository {
         }
     }
 
-    // Descarga solo los gastos confirmados el día de hoy
     suspend fun obtenerGastosDeHoy(): List<ItemCompra> {
         val hoy = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
             .format(java.util.Date())
