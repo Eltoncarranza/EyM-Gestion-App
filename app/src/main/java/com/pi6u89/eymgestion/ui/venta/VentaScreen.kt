@@ -1,5 +1,7 @@
 package com.pi6u89.eymgestion.ui.venta
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -33,6 +35,7 @@ import com.pi6u89.eymgestion.domain.Fiado
 import com.pi6u89.eymgestion.domain.PlatoPrestado
 import com.pi6u89.eymgestion.domain.Venta
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 data class ItemCarrito(
     val nombre: String,
@@ -42,12 +45,15 @@ data class ItemCarrito(
     val total: Double get() = cantidad * precioUnitario
 }
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun VentaScreen() {
     val contexto = LocalContext.current
     val cajaManager = remember { CajaManager(contexto) }
     val cajaAbierta by cajaManager.cajaAbiertaFlow.collectAsState(initial = false)
-    val platosActivos by cajaManager.platosActivosFlow.collectAsState(initial = emptySet())
+    val fechaJornada by cajaManager.fechaJornadaFlow.collectAsState(initial = null)
+
+    val platosActivos by cajaManager.platosActivosFlow.collectAsState(initial = emptySet<String>())
     val coroutineScope = rememberCoroutineScope()
 
     val clienteRepository = remember { ClienteRepository() }
@@ -60,11 +66,14 @@ fun VentaScreen() {
     if (!cajaAbierta) {
         VistaApertura(
             alAbrirCaja = { platosSeleccionados ->
-                coroutineScope.launch { cajaManager.abrirCaja(platosSeleccionados) }
+                coroutineScope.launch {
+                    val fechaHoy = LocalDate.now().toString()
+                    cajaManager.abrirCaja(platosSeleccionados, fechaHoy)
+                }
             }
         )
     } else {
-        VistaPuntoDeVenta(listaClientes, platosActivos)
+        VistaPuntoDeVenta(listaClientes, platosActivos, cajaAbierta, fechaJornada, cajaManager)
     }
 }
 
@@ -139,8 +148,15 @@ fun VistaApertura(alAbrirCaja: (Set<String>) -> Unit) {
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun VistaPuntoDeVenta(listaClientes: List<Cliente>, platosActivos: Set<String>) {
+fun VistaPuntoDeVenta(
+    listaClientes: List<Cliente>,
+    platosActivos: Set<String>,
+    cajaAbierta: Boolean,
+    fechaJornada: String?,
+    cajaManager: CajaManager
+) {
     var tabSeleccionado by remember { mutableIntStateOf(0) }
     val tabs = listOf("Comida", "Cafetería", "Bebidas")
 
@@ -202,7 +218,7 @@ fun VistaPuntoDeVenta(listaClientes: List<Cliente>, platosActivos: Set<String>) 
                         }
                     }
 
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -232,34 +248,46 @@ fun VistaPuntoDeVenta(listaClientes: List<Cliente>, platosActivos: Set<String>) 
             clientes = listaClientes,
             alDescartar = { mostrarDialogoPago = false },
             alConfirmar = { metodo, prestaPlato, clienteId ->
-                // Fuerza a que si no es Fiado, el estado sea "PAGADO"
-                val estado = if (metodo == "Fiado") "FIADO" else "PAGADO"
-
-                val nuevaVenta = Venta(
-                    montoTotal = totalMonto,
-                    costoTotal = 0.0,
-                    metodoPago = metodo,
-                    estadoPago = estado,
-                    prestaPlato = prestaPlato,
-                    clienteId = clienteId,
-                    fecha = ventasRepository.obtenerFechaHoy()
-                )
-
                 coroutineScope.launch {
+                    val fechaReloj = LocalDate.now().toString()
+
+                    val fechaParaRegistro = if (cajaAbierta && fechaJornada != null) {
+                        fechaJornada
+                    } else {
+                        fechaReloj
+                    }
+
+                    val estado = if (metodo == "Fiado") "FIADO" else "PAGADO"
+
+                    // Novedad: Juntamos todo el pedido en un solo texto para enviarlo a Supabase
+                    val textoDetalles = carrito.joinToString(separator = ", ") { "${it.cantidad}x ${it.nombre}" }
+
+                    val nuevaVenta = Venta(
+                        montoTotal = totalMonto,
+                        costoTotal = 0.0,
+                        metodoPago = metodo,
+                        estadoPago = estado,
+                        prestaPlato = prestaPlato,
+                        clienteId = clienteId,
+                        fecha = fechaParaRegistro,
+                        detalles = textoDetalles // <-- Aquí se guarda el pedido para los reportes
+                    )
+
                     val exitoVenta = ventasRepository.registrarVenta(nuevaVenta)
                     if (exitoVenta) {
                         if (metodo == "Fiado" && clienteId != null) {
-                            val nuevoFiado = Fiado(clienteId = clienteId, monto = totalMonto, fecha = ventasRepository.obtenerFechaHoy())
+                            val nuevoFiado = Fiado(clienteId = clienteId, monto = totalMonto, fecha = fechaParaRegistro)
                             ventasRepository.registrarFiado(nuevoFiado)
                         }
                         if (prestaPlato && clienteId != null) {
-                            val nuevoPlato = PlatoPrestado(clienteId = clienteId, cantidadPlatos = carrito.sumOf { it.cantidad }, fechaPrestamo = ventasRepository.obtenerFechaHoy())
+                            val nuevoPlato = PlatoPrestado(clienteId = clienteId, cantidadPlatos = carrito.sumOf { it.cantidad }, fechaPrestamo = fechaParaRegistro)
                             ventasRepository.registrarPlatoPrestado(nuevoPlato)
                         }
                     }
+
+                    carrito = emptyList()
+                    mostrarDialogoPago = false
                 }
-                carrito = emptyList()
-                mostrarDialogoPago = false
             }
         )
     }
@@ -450,7 +478,6 @@ fun DialogoPago(
                 Text(text = "Método de Pago:", fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Cambia esto en DialogoPago dentro de VentaScreen.kt
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -461,7 +488,7 @@ fun DialogoPago(
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
-                Divider()
+                HorizontalDivider()
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Row(

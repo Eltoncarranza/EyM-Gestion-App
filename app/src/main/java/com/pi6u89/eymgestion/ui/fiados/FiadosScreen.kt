@@ -13,9 +13,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.pi6u89.eymgestion.data.CajaManager
 import com.pi6u89.eymgestion.data.ClienteRepository
 import com.pi6u89.eymgestion.domain.Cliente
 import com.pi6u89.eymgestion.domain.Fiado
@@ -42,19 +44,25 @@ fun FiadosScreen() {
     var metodoSeleccionado by remember { mutableStateOf("Efectivo") }
     var procesandoPago by remember { mutableStateOf(false) }
 
-    val cargarDatos = {
-        coroutineScope.launch {
-            cargando = true
-            clientes = clienteRepository.obtenerClientes()
-            listaFiados = clienteRepository.obtenerDeudasActivas()
-            listaPlatos = clienteRepository.obtenerPlatosSinDevolver()
-            cargando = false
-        }
+    val context = LocalContext.current
+    val cajaManager = remember { CajaManager(context) }
+    val cajaAbierta by cajaManager.cajaAbiertaFlow.collectAsState(initial = false)
+    val fechaJornada by cajaManager.fechaJornadaFlow.collectAsState(initial = null)
+
+    // 1. Creamos una función suspendida pura (sin lanzar dobles corrutinas)
+    suspend fun recargarPantalla() {
+        cargando = true
+        clientes = clienteRepository.obtenerClientes()
+        listaFiados = clienteRepository.obtenerDeudasActivas()
+        listaPlatos = clienteRepository.obtenerPlatosSinDevolver()
+        cargando = false
     }
 
+    // 2. La carga inicial al abrir la pestaña
     LaunchedEffect(Unit) {
-        cargarDatos()
+        recargarPantalla()
     }
+
 
     Scaffold(
         floatingActionButton = {
@@ -195,7 +203,7 @@ fun FiadosScreen() {
                                     val ok = clienteRepository.registrarDevolucionPlatos(cliente.id)
                                     if (ok) {
                                         clienteParaDetalle = null
-                                        cargarDatos()
+                                        recargarPantalla()
                                     }
                                 }
                             },
@@ -249,18 +257,26 @@ fun FiadosScreen() {
                     onClick = {
                         coroutineScope.launch {
                             procesandoPago = true
-                            val fechaHoy = LocalDate.now().toString()
+                            val fechaReloj = LocalDate.now().toString()
+
+                            // CORRECCIÓN: Agregamos emptySet() para que compile correctamente con el nuevo CajaManager
+                            val fechaParaIngreso = if (cajaAbierta && fechaJornada != null) {
+                                fechaJornada!!
+                            } else {
+                                cajaManager.abrirCaja(emptySet(), fechaReloj)
+                                fechaReloj
+                            }
 
                             val exito = clienteRepository.liquidarDeudaConPago(
                                 clienteId = clienteParaDetalle!!.id,
                                 metodoPago = metodoSeleccionado,
-                                fechaHoy = fechaHoy
+                                fechaHoy = fechaParaIngreso
                             )
 
                             if (exito) {
                                 mostrarDialogoMetodoPago = false
                                 clienteParaDetalle = null
-                                cargarDatos()
+                                recargarPantalla()
                             }
                             procesandoPago = false
                         }
@@ -314,7 +330,7 @@ fun FiadosScreen() {
                             coroutineScope.launch {
                                 val nuevoCliente = Cliente(nombre = nombreNuevo, telefono = telefonoNuevo)
                                 clienteRepository.agregarCliente(nuevoCliente)
-                                cargarDatos()
+                                recargarPantalla()
                             }
                             mostrarDialogoNuevoCliente = false
                         }

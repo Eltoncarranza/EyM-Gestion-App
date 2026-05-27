@@ -6,154 +6,70 @@ import com.pi6u89.eymgestion.domain.Venta
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class VentasRepository {
 
+    // 1. Guarda la venta en la base de datos
     suspend fun registrarVenta(venta: Venta): Boolean {
         return withContext(Dispatchers.IO) {
             try {
                 SupabaseClient.client.postgrest["ventas"].insert(venta)
                 true
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("VENTAS_REPO", "Error al registrar venta: ${e.message}")
                 false
             }
         }
     }
 
+    // 2. Registra la deuda si el cliente pidió fiado
     suspend fun registrarFiado(fiado: Fiado): Boolean {
         return withContext(Dispatchers.IO) {
             try {
                 SupabaseClient.client.postgrest["fiados"].insert(fiado)
                 true
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("VENTAS_REPO", "Error al registrar fiado: ${e.message}")
                 false
             }
         }
     }
 
+    // 3. Registra la vajilla prestada si aplica
     suspend fun registrarPlatoPrestado(plato: PlatoPrestado): Boolean {
         return withContext(Dispatchers.IO) {
             try {
                 SupabaseClient.client.postgrest["platos_prestados"].insert(plato)
                 true
             } catch (e: Exception) {
-                e.printStackTrace()
+                android.util.Log.e("VENTAS_REPO", "Error al registrar plato: ${e.message}")
                 false
             }
         }
     }
 
+    // 4. Descarga las ventas de un día específico para los Reportes
     suspend fun obtenerVentasPorFecha(fecha: String): List<Venta> {
-        return withContext(Dispatchers.IO) {
-            try {
-                // Buscamos coincidencia exacta por el string de fecha (ej: "2026-05-21")
-                val ventas = SupabaseClient.client.postgrest["ventas"]
-                    .select {
-                        filter { eq("fecha", fecha) }
-                    }
-                    .decodeList<Venta>()
-
-                android.util.Log.d("DEBUG_REPO", "Ventas encontradas para $fecha: ${ventas.size}")
-                ventas
-            } catch (e: Exception) {
-                android.util.Log.e("VENTAS_REPO", "Error al traer ventas: ${e.message}")
-                emptyList()
-            }
-        }
-    }
-
-    suspend fun obtenerVentasPorRango(fechaInicio: String, fechaFin: String): List<Venta> {
-        return withContext(Dispatchers.IO) {
-            try {
-                SupabaseClient.client.postgrest["ventas"]
-                    .select {
-                        filter {
-                            gte("fecha", fechaInicio)
-                            lte("fecha", fechaFin)
-                        }
-                    }
-                    .decodeList<Venta>()
-            } catch (e: Exception) {
-                emptyList()
-            }
-        }
-    }
-
-    suspend fun obtenerReporteCierreDeCaja(fecha: String): ReporteCierre {
-        val ventas = obtenerVentasPorFecha(fecha)
-
-        return ReporteCierre(
-            ventasEfectivo = ventas.filter {
-                it.metodoPago.trim().equals("Efectivo", true) &&
-                        (it.estadoPago ?: "PAGADO").trim().equals("PAGADO", true)
-            }.sumOf { it.montoTotal },
-
-            ventasYape = ventas.filter {
-                it.metodoPago.trim().equals("Yape", true) &&
-                        (it.estadoPago ?: "PAGADO").trim().equals("PAGADO", true)
-            }.sumOf { it.montoTotal },
-
-            ventasPlin = ventas.filter {
-                it.metodoPago.trim().equals("Plin", true) &&
-                        (it.estadoPago ?: "PAGADO").trim().equals("PAGADO", true)
-            }.sumOf { it.montoTotal },
-
-            ventasFiadas = ventas.filter {
-                (it.estadoPago ?: "").trim().equals("FIADO", true)
-            }.sumOf { it.montoTotal }
-        )
-    }
-
-    data class ReporteCierre(
-        val ventasEfectivo: Double,
-        val ventasYape: Double,
-        val ventasPlin: Double,
-        val ventasFiadas: Double
-    ) {
-        val totalRecaudado: Double get() = ventasEfectivo + ventasYape + ventasPlin
-        val totalGeneral: Double get() = totalRecaudado + ventasFiadas
-    }
-
-    fun obtenerFechaHoy(): String {
-        return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-    }
-
-    suspend fun obtenerVentasDeHoy(): List<Venta> {
-        return obtenerVentasPorFecha(obtenerFechaHoy())
-    }
-
-    suspend fun obtenerTodosLosFiados(): List<Fiado> {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             try {
-                // Trae todos los registros de la tabla fiados
-                SupabaseClient.client.postgrest["fiados"]
+                // 1. Pedimos a Supabase TODAS las ventas (sin filtros) para burlar errores de formato
+                val todasLasVentas = SupabaseClient.client.postgrest["ventas"]
                     .select()
-                    .decodeList<Fiado>()
-            } catch (e: Exception) {
-                android.util.Log.e("VENTAS_REPO", "Error al obtener fiados: ${e.message}")
-                emptyList()
-            }
-        }
-    }
-    suspend fun procesarPagoDeFiado(fiadoId: Int, ventaEquivalente: Venta): Boolean {
-        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            try {
-                SupabaseClient.client.postgrest["ventas"].insert(ventaEquivalente)
+                    .decodeList<Venta>()
 
-                SupabaseClient.client.postgrest["fiados"].delete {
-                    filter {
-                        eq("id", fiadoId)
-                    }
-                }
-                true
+                android.util.Log.d("DEBUG_REPO", "TOTAL de ventas en Supabase: ${todasLasVentas.size}")
+
+                // 2. Filtramos la fecha directamente aquí en la aplicación
+                val ventasDelDia = todasLasVentas.filter { it.fecha.startsWith(fecha) }
+
+                android.util.Log.d("DEBUG_REPO", "Ventas que coinciden con $fecha: ${ventasDelDia.size}")
+
+                ventasDelDia
             } catch (e: Exception) {
-                android.util.Log.e("VENTAS_REPO", "Error al procesar pago de fiado: ${e.message}")
-                false
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    android.util.Log.e("SUPABASE_ERROR", "Error al traer ventas: ${e.message}")
+                }
+                emptyList()
             }
         }
     }
