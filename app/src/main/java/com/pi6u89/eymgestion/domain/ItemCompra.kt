@@ -1,6 +1,7 @@
 package com.pi6u89.eymgestion.domain
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 @Serializable
 data class ItemCompra(
@@ -9,5 +10,5 @@ data class ItemCompra(
     val cantidad: String,
     val comprado: Boolean = false,
     val costo: Double = 0.0,
-    val fecha: String = ""
+    @Transient val fecha: String = "" 
 )

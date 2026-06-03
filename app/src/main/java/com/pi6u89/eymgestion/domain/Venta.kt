@@ -7,11 +7,11 @@ import kotlinx.serialization.Serializable
 data class Venta(
     val id: Int = 0,
     @SerialName("monto_total") val montoTotal: Double,
-    @SerialName("costo_total") val costoTotal: Double = 0.0,
+    @SerialName("costo_total") val costoTotal: Double? = 0.0, // 👈 Ahora acepta nulos
     @SerialName("metodo_pago") val metodoPago: String,
-    @SerialName("estado_pago") val estadoPago: String,
-    @SerialName("presta_plato") val prestaPlato: Boolean = false,
+    @SerialName("estado_pago") val estadoPago: String? = "PAGADO", // 👈 Ahora acepta nulos
+    @SerialName("presta_plato") val prestaPlato: Boolean? = false, // 👈 Ahora acepta nulos
     @SerialName("cliente_id") val clienteId: Int? = null,
     val fecha: String,
-    val detalles: String
+    val detalles: String? = "" // 👈 ¡EL SECRETO! Ahora acepta nulos y ya no crasheará
 )

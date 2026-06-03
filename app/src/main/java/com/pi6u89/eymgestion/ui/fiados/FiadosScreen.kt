@@ -49,7 +49,6 @@ fun FiadosScreen() {
     val cajaAbierta by cajaManager.cajaAbiertaFlow.collectAsState(initial = false)
     val fechaJornada by cajaManager.fechaJornadaFlow.collectAsState(initial = null)
 
-    // 1. Creamos una función suspendida pura (sin lanzar dobles corrutinas)
     suspend fun recargarPantalla() {
         cargando = true
         clientes = clienteRepository.obtenerClientes()
@@ -58,39 +57,21 @@ fun FiadosScreen() {
         cargando = false
     }
 
-    // 2. La carga inicial al abrir la pestaña
-    LaunchedEffect(Unit) {
-        recargarPantalla()
-    }
-
+    LaunchedEffect(Unit) { recargarPantalla() }
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { mostrarDialogoNuevoCliente = true },
-                containerColor = MaterialTheme.colorScheme.primary
-            ) {
+            FloatingActionButton(onClick = { mostrarDialogoNuevoCliente = true }) {
                 Icon(Icons.Default.Add, contentDescription = "Agregar Cliente")
             }
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
-        ) {
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
             Text(text = "Mis Caseritos y Deudas", fontSize = 24.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(16.dp))
 
             if (cargando) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            } else if (clientes.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Aún no tienes clientes registrados.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(clientes) { cliente ->
@@ -98,38 +79,18 @@ fun FiadosScreen() {
                         val platosTotales = listaPlatos.filter { it.clienteId == cliente.id }.sumOf { it.cantidadPlatos }
 
                         Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { clienteParaDetalle = cliente },
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                            modifier = Modifier.fillMaxWidth().clickable { clienteParaDetalle = cliente },
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
+                            Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
+                                    Icon(Icons.Default.Person, contentDescription = null)
                                     Spacer(modifier = Modifier.width(16.dp))
-                                    Column {
-                                        Text(text = cliente.nombre, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                                        if (cliente.telefono.isNotEmpty()) {
-                                            Text(text = "Cel: ${cliente.telefono}", fontSize = 14.sp)
-                                        }
-                                    }
+                                    Text(text = cliente.nombre, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                                 }
-
                                 Column(horizontalAlignment = Alignment.End) {
-                                    if (deudaTotal > 0) {
-                                        Text(text = "S/. $deudaTotal", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
-                                    }
-                                    if (platosTotales > 0) {
-                                        Text(text = "$platosTotales platos", fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
-                                    }
-                                    if (deudaTotal == 0.0 && platosTotales == 0) {
-                                        Text(text = "Sin deudas", fontSize = 14.sp, color = MaterialTheme.colorScheme.secondary)
-                                    }
+                                    if(deudaTotal > 0) Text("S/. $deudaTotal", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                                    if(platosTotales > 0) Text("$platosTotales platos", color = MaterialTheme.colorScheme.primary)
                                 }
                             }
                         }
@@ -145,108 +106,58 @@ fun FiadosScreen() {
 
         AlertDialog(
             onDismissRequest = { clienteParaDetalle = null },
-            title = { Text(text = "Cuenta de ${cliente.nombre}", fontWeight = FontWeight.Bold) },
+            title = { Text("Cuenta de ${cliente.nombre}") },
             text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(text = "💰 Dinero Adeudado", fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = MaterialTheme.colorScheme.error)
-                    if (deudasCliente.isEmpty()) {
-                        Text("No registra deudas de dinero.", color = MaterialTheme.colorScheme.secondary)
-                    } else {
-                        Text(
-                            text = "Total Pendiente: S/. ${deudasCliente.sumOf { it.monto }}",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
-                        )
-                        Button(
-                            onClick = {
-                                mostrarDialogoMetodoPago = true
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // SECCIÓN DEUDAS
+                    Text("💰 Dinero Adeudado", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+                    if (deudasCliente.isEmpty()) Text("No registra deudas.")
+                    else {
+                        Text("Total: S/. ${deudasCliente.sumOf { it.monto }}", fontWeight = FontWeight.Bold)
+                        Button(onClick = { mostrarDialogoMetodoPago = true }, modifier = Modifier.fillMaxWidth()) {
                             Text("Marcar Deuda Como Pagada")
                         }
                     }
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider()
 
-                    Text(text = "🍲 Vajilla Prestada", fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = MaterialTheme.colorScheme.primary)
+                    // SECCIÓN PLATOS PRESTADOS (RESTAURADA)
+                    Text("🍲 Vajilla Prestada", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
                     if (platosCliente.isEmpty()) {
-                        Text("No tiene platos prestados.", color = MaterialTheme.colorScheme.secondary)
+                        Text("No tiene platos prestados.")
                     } else {
-                        Text(
-                            text = "Platos Pendientes: ${platosCliente.sumOf { it.cantidadPlatos }}",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
-                        )
-
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(start = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            platosCliente.forEach { registro ->
-                                Text(
-                                    text = "• ${registro.cantidadPlatos} platos el día ${registro.fechaPrestamo}",
-                                    fontSize = 14.sp
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
+                        Text("Platos pendientes: ${platosCliente.sumOf { it.cantidadPlatos }}", fontWeight = FontWeight.Bold)
                         Button(
                             onClick = {
                                 coroutineScope.launch {
-                                    val ok = clienteRepository.registrarDevolucionPlatos(cliente.id)
-                                    if (ok) {
-                                        clienteParaDetalle = null
+                                    if (clienteRepository.registrarDevolucionPlatos(cliente.id)) {
                                         recargarPantalla()
                                     }
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Registrar Devolución")
-                        }
+                        ) { Text("Registrar Devolución") }
                     }
                 }
             },
-            confirmButton = {
-                TextButton(onClick = { clienteParaDetalle = null }) { Text("Cerrar") }
-            }
+            confirmButton = { TextButton(onClick = { clienteParaDetalle = null }) { Text("Cerrar") } }
         )
     }
 
     if (mostrarDialogoMetodoPago && clienteParaDetalle != null) {
-        val totalMontoCobro = listaFiados.filter { it.clienteId == clienteParaDetalle!!.id }.sumOf { it.monto }
+        val cliente = clienteParaDetalle!!
+        val totalMontoCobro = listaFiados.filter { it.clienteId == cliente.id }.sumOf { it.monto }
 
         AlertDialog(
             onDismissRequest = { if (!procesandoPago) mostrarDialogoMetodoPago = false },
-            title = { Text("Registrar Ingreso de Caja", fontWeight = FontWeight.Bold) },
+            title = { Text("Confirmar Pago") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Se registrará la liquidación de deuda para **${clienteParaDetalle!!.nombre}**.")
-                    Text("Monto Total a Recaudar: **S/. $totalMontoCobro**", fontSize = 16.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Selecciona cómo se recibió el dinero:", fontWeight = FontWeight.SemiBold)
-
-                    val opcionesPago = listOf("Efectivo", "Yape", "Plin")
-                    opcionesPago.forEach { opcion ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { if (!procesandoPago) metodoSeleccionado = opcion }
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = (metodoSeleccionado == opcion),
-                                onClick = { if (!procesandoPago) metodoSeleccionado = opcion }
-                            )
-                            Text(text = opcion, modifier = Modifier.padding(start = 8.dp))
+                Column {
+                    Text("Cobrar S/. $totalMontoCobro a ${cliente.nombre}")
+                    listOf("Efectivo", "Yape", "Plin").forEach { metodo ->
+                        Row(Modifier.fillMaxWidth().clickable { metodoSeleccionado = metodo }, verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = metodoSeleccionado == metodo, onClick = { metodoSeleccionado = metodo })
+                            Text(metodo)
                         }
                     }
                 }
@@ -258,21 +169,12 @@ fun FiadosScreen() {
                         coroutineScope.launch {
                             procesandoPago = true
                             val fechaReloj = LocalDate.now().toString()
-
-                            // CORRECCIÓN: Agregamos emptySet() para que compile correctamente con el nuevo CajaManager
-                            val fechaParaIngreso = if (cajaAbierta && fechaJornada != null) {
-                                fechaJornada!!
-                            } else {
+                            val fechaParaIngreso = if (cajaAbierta && fechaJornada != null) fechaJornada!! else {
                                 cajaManager.abrirCaja(emptySet(), fechaReloj)
                                 fechaReloj
                             }
 
-                            val exito = clienteRepository.liquidarDeudaConPago(
-                                clienteId = clienteParaDetalle!!.id,
-                                metodoPago = metodoSeleccionado,
-                                fechaHoy = fechaParaIngreso
-                            )
-
+                            val exito = clienteRepository.liquidarDeudaConPago(cliente.id, metodoSeleccionado, fechaParaIngreso)
                             if (exito) {
                                 mostrarDialogoMetodoPago = false
                                 clienteParaDetalle = null
@@ -282,19 +184,11 @@ fun FiadosScreen() {
                         }
                     }
                 ) {
-                    if (procesandoPago) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
-                    } else {
-                        Text("Confirmar Pago")
-                    }
+                    if (procesandoPago) CircularProgressIndicator(Modifier.size(20.dp))
+                    else Text("Pagar")
                 }
-
             },
-            dismissButton = {
-                if (!procesandoPago) {
-                    TextButton(onClick = { mostrarDialogoMetodoPago = false }) { Text("Cancelar") }
-                }
-            }
+            dismissButton = { TextButton(onClick = { mostrarDialogoMetodoPago = false }) { Text("Cancelar") } }
         )
     }
 
