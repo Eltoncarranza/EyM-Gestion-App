@@ -11,9 +11,9 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.pi6u89.eymgestion.ui.compras.ComprasScreen
 import com.pi6u89.eymgestion.ui.fiados.FiadosScreen
 import com.pi6u89.eymgestion.ui.reportes.ReportesScreen
-import com.pi6u89.eymgestion.ui.compras.ComprasScreen
 import com.pi6u89.eymgestion.ui.venta.VentaScreen
 
 @RequiresApi(Build.VERSION_CODES.O)

@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Person
@@ -15,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pi6u89.eymgestion.data.CajaManager
@@ -31,6 +33,7 @@ import java.time.LocalDate
 fun FiadosScreen() {
     val clienteRepository = remember { ClienteRepository() }
     val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() } // 👈 PARA NOTIFICACIONES
 
     var clientes by remember { mutableStateOf<List<Cliente>>(emptyList()) }
     var listaFiados by remember { mutableStateOf<List<Fiado>>(emptyList()) }
@@ -43,6 +46,7 @@ fun FiadosScreen() {
     var mostrarDialogoMetodoPago by remember { mutableStateOf(false) }
     var metodoSeleccionado by remember { mutableStateOf("Efectivo") }
     var procesandoPago by remember { mutableStateOf(false) }
+    var montoAbonoInput by remember { mutableStateOf("") } // 👈 PARA EL PAGO PARCIAL
 
     val context = LocalContext.current
     val cajaManager = remember { CajaManager(context) }
@@ -51,15 +55,18 @@ fun FiadosScreen() {
 
     suspend fun recargarPantalla() {
         cargando = true
-        clientes = clienteRepository.obtenerClientes()
-        listaFiados = clienteRepository.obtenerDeudasActivas()
-        listaPlatos = clienteRepository.obtenerPlatosSinDevolver()
+        try {
+            clientes = clienteRepository.obtenerClientes()
+            listaFiados = clienteRepository.obtenerDeudasActivas()
+            listaPlatos = clienteRepository.obtenerPlatosSinDevolver()
+        } catch (e: Exception) {}
         cargando = false
     }
 
     LaunchedEffect(Unit) { recargarPantalla() }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(onClick = { mostrarDialogoNuevoCliente = true }) {
                 Icon(Icons.Default.Add, contentDescription = "Agregar Cliente")
@@ -100,28 +107,35 @@ fun FiadosScreen() {
         }
     }
 
+    // DIÁLOGO DETALLES DE CLIENTE
     clienteParaDetalle?.let { cliente ->
         val deudasCliente = listaFiados.filter { it.clienteId == cliente.id }
         val platosCliente = listaPlatos.filter { it.clienteId == cliente.id }
+        val deudaTotal = deudasCliente.sumOf { it.monto }
 
         AlertDialog(
             onDismissRequest = { clienteParaDetalle = null },
             title = { Text("Cuenta de ${cliente.nombre}") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // SECCIÓN DEUDAS
                     Text("💰 Dinero Adeudado", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
-                    if (deudasCliente.isEmpty()) Text("No registra deudas.")
-                    else {
-                        Text("Total: S/. ${deudasCliente.sumOf { it.monto }}", fontWeight = FontWeight.Bold)
-                        Button(onClick = { mostrarDialogoMetodoPago = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text("Marcar Deuda Como Pagada")
+                    if (deudasCliente.isEmpty()) {
+                        Text("No registra deudas de dinero.")
+                    } else {
+                        Text("Total Pendiente: S/. $deudaTotal", fontWeight = FontWeight.Bold)
+                        Button(
+                            onClick = {
+                                montoAbonoInput = deudaTotal.toString() // Ponemos el total por defecto
+                                mostrarDialogoMetodoPago = true
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Abonar o Liquidar Deuda")
                         }
                     }
 
                     HorizontalDivider()
 
-                    // SECCIÓN PLATOS PRESTADOS (RESTAURADA)
                     Text("🍲 Vajilla Prestada", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
                     if (platosCliente.isEmpty()) {
                         Text("No tiene platos prestados.")
@@ -132,6 +146,7 @@ fun FiadosScreen() {
                                 coroutineScope.launch {
                                     if (clienteRepository.registrarDevolucionPlatos(cliente.id)) {
                                         recargarPantalla()
+                                        snackbarHostState.showSnackbar("✅ Platos devueltos")
                                     }
                                 }
                             },
@@ -144,51 +159,82 @@ fun FiadosScreen() {
         )
     }
 
+    // DIÁLOGO PARA PAGOS (PARCIALES O COMPLETOS)
     if (mostrarDialogoMetodoPago && clienteParaDetalle != null) {
         val cliente = clienteParaDetalle!!
-        val totalMontoCobro = listaFiados.filter { it.clienteId == cliente.id }.sumOf { it.monto }
+        val deudaTotal = listaFiados.filter { it.clienteId == cliente.id }.sumOf { it.monto }
 
         AlertDialog(
             onDismissRequest = { if (!procesandoPago) mostrarDialogoMetodoPago = false },
-            title = { Text("Confirmar Pago") },
+            title = { Text("Registrar Abono: ${cliente.nombre}") },
             text = {
-                Column {
-                    Text("Cobrar S/. $totalMontoCobro a ${cliente.nombre}")
-                    listOf("Efectivo", "Yape", "Plin").forEach { metodo ->
-                        Row(Modifier.fillMaxWidth().clickable { metodoSeleccionado = metodo }, verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selected = metodoSeleccionado == metodo, onClick = { metodoSeleccionado = metodo })
-                            Text(metodo)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Deuda Total: S/. $deudaTotal", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                    Text("Ingresa el monto que el cliente está pagando en este momento:", fontSize = 14.sp)
+
+                    OutlinedTextField(
+                        value = montoAbonoInput,
+                        onValueChange = { montoAbonoInput = it },
+                        label = { Text("Monto a Pagar (S/.)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    Text("Método de pago:", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("Efectivo", "Yape", "Plin").forEach { metodo ->
+                            val seleccionado = metodoSeleccionado == metodo
+                            OutlinedButton(
+                                onClick = { if (!procesandoPago) metodoSeleccionado = metodo },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    containerColor = if (seleccionado) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                    contentColor = if (seleccionado) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                )
+                            ) { Text(metodo, fontSize = 12.sp) }
                         }
                     }
                 }
             },
             confirmButton = {
                 Button(
-                    enabled = !procesandoPago,
+                    enabled = !procesandoPago && montoAbonoInput.isNotBlank(),
                     onClick = {
+                        val montoAbono = montoAbonoInput.toDoubleOrNull() ?: 0.0
+
+                        // Verificamos que el monto sea válido
+                        if (montoAbono <= 0.0 || montoAbono > deudaTotal) {
+                            coroutineScope.launch { snackbarHostState.showSnackbar("❌ Monto inválido. No puede ser 0 ni mayor a la deuda.") }
+                            return@Button
+                        }
+
                         coroutineScope.launch {
                             procesandoPago = true
                             val fechaReloj = LocalDate.now().toString()
-                            val fechaParaIngreso = if (cajaAbierta && fechaJornada != null) fechaJornada!! else {
-                                cajaManager.abrirCaja(emptySet(), fechaReloj)
-                                fechaReloj
-                            }
+                            val fechaParaIngreso = if (cajaAbierta && fechaJornada != null) fechaJornada!! else fechaReloj
 
-                            val exito = clienteRepository.liquidarDeudaConPago(cliente.id, metodoSeleccionado, fechaParaIngreso)
+                            val exito = clienteRepository.registrarAbonoDeuda(cliente.id, montoAbono, metodoSeleccionado, fechaParaIngreso)
+
                             if (exito) {
                                 mostrarDialogoMetodoPago = false
                                 clienteParaDetalle = null
                                 recargarPantalla()
+                                snackbarHostState.showSnackbar("✅ Abono registrado correctamente")
+                            } else {
+                                snackbarHostState.showSnackbar("❌ Error de conexión al registrar el abono")
                             }
                             procesandoPago = false
                         }
                     }
                 ) {
-                    if (procesandoPago) CircularProgressIndicator(Modifier.size(20.dp))
-                    else Text("Pagar")
+                    if (procesandoPago) CircularProgressIndicator(Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
+                    else Text("Confirmar Abono")
                 }
             },
-            dismissButton = { TextButton(onClick = { mostrarDialogoMetodoPago = false }) { Text("Cancelar") } }
+            dismissButton = {
+                if (!procesandoPago) TextButton(onClick = { mostrarDialogoMetodoPago = false }) { Text("Cancelar") }
+            }
         )
     }
 
@@ -202,38 +248,30 @@ fun FiadosScreen() {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
-                        value = nombreNuevo,
-                        onValueChange = { nombreNuevo = it },
-                        label = { Text("Nombre Completo o Apodo") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        value = nombreNuevo, onValueChange = { nombreNuevo = it },
+                        label = { Text("Nombre Completo o Apodo") }, singleLine = true, modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
-                        value = telefonoNuevo,
-                        onValueChange = { telefonoNuevo = it },
-                        label = { Text("Teléfono (Opcional)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        value = telefonoNuevo, onValueChange = { telefonoNuevo = it },
+                        label = { Text("Teléfono (Opcional)") }, singleLine = true, modifier = Modifier.fillMaxWidth()
                     )
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        if (nombreNuevo.isNotBlank()) {
-                            coroutineScope.launch {
-                                val nuevoCliente = Cliente(nombre = nombreNuevo, telefono = telefonoNuevo)
-                                clienteRepository.agregarCliente(nuevoCliente)
+                Button(onClick = {
+                    if (nombreNuevo.isNotBlank()) {
+                        coroutineScope.launch {
+                            val nuevoCliente = Cliente(nombre = nombreNuevo, telefono = telefonoNuevo)
+                            if (clienteRepository.agregarCliente(nuevoCliente)) {
                                 recargarPantalla()
-                            }
-                            mostrarDialogoNuevoCliente = false
+                                snackbarHostState.showSnackbar("✅ Cliente guardado")
+                            } else snackbarHostState.showSnackbar("❌ Error al crear cliente")
                         }
+                        mostrarDialogoNuevoCliente = false
                     }
-                ) { Text("Guardar") }
+                }) { Text("Guardar") }
             },
-            dismissButton = {
-                TextButton(onClick = { mostrarDialogoNuevoCliente = false }) { Text("Cancelar") }
-            }
+            dismissButton = { TextButton(onClick = { mostrarDialogoNuevoCliente = false }) { Text("Cancelar") } }
         )
     }
 }

@@ -12,37 +12,23 @@ class ComprasRepository {
     suspend fun obtenerListaCompras(): List<ItemCompra> {
         return withContext(Dispatchers.IO) {
             try {
-                // Asegúrate de que el nombre aquí "lista_compras" coincida EXACTAMENTE con tu tabla en Supabase
-                SupabaseClient.client.postgrest["lista_compras"]
-                    .select()
-                    .decodeList<ItemCompra>()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error en SELECT: ${e.message}")
-                emptyList()
-            }
+                SupabaseClient.client.postgrest["lista_compras"].select().decodeList<ItemCompra>()
+            } catch (e: Exception) { emptyList() }
         }
     }
 
-    suspend fun marcarComoComprado(id: Int, nuevoCosto: Double): Boolean {
+    // 👈 AHORA RECIBE LA FECHA DE HOY
+    suspend fun marcarComoComprado(id: Int, nuevoCosto: Double, fechaHoy: String): Boolean {
         return withContext(Dispatchers.IO) {
             try {
-                Log.d(TAG, "Intentando actualizar ID: $id con Costo: $nuevoCosto")
-
-                // Ejecutamos el update
-                val result = SupabaseClient.client.postgrest["lista_compras"]
+                SupabaseClient.client.postgrest["lista_compras"]
                     .update({
                         set("comprado", true)
                         set("costo", nuevoCosto)
-                    }) {
-                        filter { eq("id", id) }
-                    }
-
-                Log.d(TAG, "Resultado de actualización: Exitoso")
+                        set("fecha", fechaHoy) // 👈 SE GUARDA LA FECHA EN BASE DE DATOS
+                    }) { filter { eq("id", id) } }
                 true
-            } catch (e: Exception) {
-                Log.e(TAG, "ERROR FATAL EN UPDATE: ${e.message}")
-                false
-            }
+            } catch (e: Exception) { false }
         }
     }
 
@@ -51,12 +37,16 @@ class ComprasRepository {
             try {
                 SupabaseClient.client.postgrest["lista_compras"].insert(item)
                 true
-            } catch (e: Exception) {
-                Log.e(TAG, "ERROR FATAL EN INSERT: ${e.message}")
-                false
-            }
+            } catch (e: Exception) { false }
         }
     }
 
-    fun eliminarItem(id: Int) {}
+    suspend fun eliminarItem(id: Int): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                SupabaseClient.client.postgrest["lista_compras"].delete { filter { eq("id", id) } }
+                true
+            } catch (e: Exception) { false }
+        }
+    }
 }

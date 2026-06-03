@@ -1,14 +1,16 @@
 package com.pi6u89.eymgestion.domain
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.Transient
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class ItemCompra(
-    val id: Int = 0,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val id: Int = 0,
     val producto: String,
     val cantidad: String,
     val comprado: Boolean = false,
     val costo: Double = 0.0,
-    @Transient val fecha: String = "" 
+    val fecha: String = "" // 👈 ¡AHORA SÍ SE GUARDARÁ EN SUPABASE!
 )

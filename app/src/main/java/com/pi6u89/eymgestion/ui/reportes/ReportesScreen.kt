@@ -18,9 +18,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.pi6u89.eymgestion.data.ComprasRepository
 import com.pi6u89.eymgestion.data.VentasRepository
+import com.pi6u89.eymgestion.domain.ItemCompra
 import com.pi6u89.eymgestion.domain.Venta
 import kotlinx.coroutines.launch
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -29,60 +32,97 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun ReportesScreen() {
     val ventasRepository = remember { VentasRepository() }
+    val comprasRepository = remember { ComprasRepository() }
     val coroutineScope = rememberCoroutineScope()
 
-    var listaVentas by remember { mutableStateOf<List<Venta>>(emptyList()) }
+    var todasLasVentas by remember { mutableStateOf<List<Venta>>(emptyList()) }
+    var todasLasCompras by remember { mutableStateOf<List<ItemCompra>>(emptyList()) }
     var cargando by remember { mutableStateOf(true) }
 
-    var fechaSeleccionada by remember { mutableStateOf(LocalDate.now()) }
-    val formateador = remember { DateTimeFormatter.ofPattern("dd / MM / yyyy") }
+    // Control de Fechas y Filtros (0=Día, 1=Semana, 2=Mes)
+    var tipoFiltro by remember { mutableIntStateOf(0) }
+    var fechaBase by remember { mutableStateOf(LocalDate.now()) }
 
+    // BottomSheet para ver el detalle
     val sheetState = rememberModalBottomSheetState()
     var mostrarBottomSheet by remember { mutableStateOf(false) }
     var categoriaSeleccionada by remember { mutableStateOf("") }
 
-    LaunchedEffect(fechaSeleccionada) {
-        coroutineScope.launch {
-            cargando = true
-            listaVentas = ventasRepository.obtenerVentasPorFecha(fechaSeleccionada.toString())
-            cargando = false
+    // Carga de datos masiva al entrar a la pantalla
+    LaunchedEffect(Unit) {
+        cargando = true
+        todasLasVentas = ventasRepository.obtenerTodasLasVentas()
+        todasLasCompras = comprasRepository.obtenerListaCompras()
+        cargando = false
+    }
+
+    // 1. CÁLCULO DEL RANGO DE FECHAS SEGÚN EL FILTRO ELEGIDO
+    val fechaInicio = when (tipoFiltro) {
+        0 -> fechaBase
+        1 -> fechaBase.with(DayOfWeek.MONDAY)
+        2 -> fechaBase.withDayOfMonth(1)
+        else -> fechaBase
+    }
+    val fechaFin = when (tipoFiltro) {
+        0 -> fechaBase
+        1 -> fechaBase.with(DayOfWeek.SUNDAY)
+        2 -> fechaBase.withDayOfMonth(fechaBase.lengthOfMonth())
+        else -> fechaBase
+    }
+
+    val formatoDia = DateTimeFormatter.ofPattern("dd/MM/yyyy")
+    val formatoMes = DateTimeFormatter.ofPattern("MM/yyyy")
+
+    val textoRango = when (tipoFiltro) {
+        0 -> if (fechaBase == LocalDate.now()) "Hoy (${fechaBase.format(formatoDia)})" else fechaBase.format(formatoDia)
+        1 -> "${fechaInicio.format(formatoDia)} al ${fechaFin.format(formatoDia)}"
+        2 -> "Mes: ${fechaBase.format(formatoMes)}"
+        else -> ""
+    }
+
+    // 2. FILTRAMOS LAS LISTAS USANDO EL RANGO (Ingresos vs Gastos)
+    val ventasFiltradas = todasLasVentas.filter { venta ->
+        val fechaVenta = try { LocalDate.parse(venta.fecha) } catch (e: Exception) { null }
+        fechaVenta != null && !fechaVenta.isBefore(fechaInicio) && !fechaVenta.isAfter(fechaFin)
+    }
+
+    val comprasFiltradas = todasLasCompras.filter { compra ->
+        if (!compra.comprado || compra.fecha.isBlank()) false
+        else {
+            val fechaCompra = try { LocalDate.parse(compra.fecha) } catch (e: Exception) { null }
+            fechaCompra != null && !fechaCompra.isBefore(fechaInicio) && !fechaCompra.isAfter(fechaFin)
         }
     }
 
-    // --- FILTROS FLEXIBLES A PRUEBA DE ERRORES ---
-    val ventasEfectivo = listaVentas.filter {
-        (it.metodoPago ?: "").contains("Efectivo", ignoreCase = true) &&
-                (it.estadoPago ?: "PAGADO").contains("PAGADO", ignoreCase = true)
-    }
-    val ventasYape = listaVentas.filter {
-        (it.metodoPago ?: "").contains("Yape", ignoreCase = true) &&
-                (it.estadoPago ?: "PAGADO").contains("PAGADO", ignoreCase = true)
-    }
-    val ventasPlin = listaVentas.filter {
-        (it.metodoPago ?: "").contains("Plin", ignoreCase = true) &&
-                (it.estadoPago ?: "PAGADO").contains("PAGADO", ignoreCase = true)
-    }
-    val ventasFiado = listaVentas.filter {
-        (it.estadoPago ?: "").contains("FIADO", ignoreCase = true)
-    }
+    // 3. CÁLCULOS MATEMÁTICOS
+    val ventasEfectivo = ventasFiltradas.filter { (it.metodoPago).contains("Efectivo", true) && (it.estadoPago ?: "").contains("PAGADO", true) }
+    val ventasYape = ventasFiltradas.filter { (it.metodoPago).contains("Yape", true) && (it.estadoPago ?: "").contains("PAGADO", true) }
+    val ventasPlin = ventasFiltradas.filter { (it.metodoPago).contains("Plin", true) && (it.estadoPago ?: "").contains("PAGADO", true) }
+    val ventasFiado = ventasFiltradas.filter { (it.estadoPago ?: "").contains("FIADO", true) }
 
-    val totalEfectivo = ventasEfectivo.sumOf { it.montoTotal }
-    val totalYape = ventasYape.sumOf { it.montoTotal }
-    val totalPlin = ventasPlin.sumOf { it.montoTotal }
-    val totalFiado = ventasFiado.sumOf { it.montoTotal }
-    val totalCaja = totalEfectivo + totalYape + totalPlin
+    val totalIngresos = ventasEfectivo.sumOf { it.montoTotal } + ventasYape.sumOf { it.montoTotal } + ventasPlin.sumOf { it.montoTotal }
+    val totalGastos = comprasFiltradas.sumOf { it.costo }
+    val gananciaNeta = totalIngresos - totalGastos
 
     Scaffold { paddingValues ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp),
+            modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Caja y Reportes", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Text("Balance Financiero", fontSize = 28.sp, fontWeight = FontWeight.Bold)
 
-            // --- NAVEGADOR DE DÍAS ---
+            // --- TABS DE FILTRO (DÍA / SEMANA / MES) ---
+            TabRow(selectedTabIndex = tipoFiltro) {
+                listOf("Día", "Semana", "Mes").forEachIndexed { index, title ->
+                    Tab(
+                        selected = tipoFiltro == index,
+                        onClick = { tipoFiltro = index; fechaBase = LocalDate.now() },
+                        text = { Text(title, fontWeight = FontWeight.Bold) }
+                    )
+                }
+            }
+
+            // --- NAVEGADOR DE TIEMPO ---
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -92,137 +132,88 @@ fun ReportesScreen() {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = { fechaSeleccionada = fechaSeleccionada.minusDays(1) }) {
-                        Icon(Icons.Default.ArrowBackIosNew, contentDescription = "Día Anterior")
-                    }
-                    Text(
-                        text = if (fechaSeleccionada == LocalDate.now()) "Hoy (${fechaSeleccionada.format(formateador)})"
-                        else fechaSeleccionada.format(formateador),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    IconButton(onClick = { fechaSeleccionada = fechaSeleccionada.plusDays(1) }) {
-                        Icon(Icons.Default.ArrowForwardIos, contentDescription = "Día Siguiente")
-                    }
+                    IconButton(onClick = {
+                        fechaBase = when (tipoFiltro) { 0 -> fechaBase.minusDays(1); 1 -> fechaBase.minusWeeks(1); else -> fechaBase.minusMonths(1) }
+                    }) { Icon(Icons.Default.ArrowBackIosNew, null) }
+
+                    Text(text = textoRango, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                    IconButton(onClick = {
+                        fechaBase = when (tipoFiltro) { 0 -> fechaBase.plusDays(1); 1 -> fechaBase.plusWeeks(1); else -> fechaBase.plusMonths(1) }
+                    }) { Icon(Icons.Default.ArrowForwardIos, null) }
                 }
             }
 
             if (cargando) {
-                Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
+                Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             } else {
 
-                CuadroReporte(
-                    titulo = "TOTAL EN CAJA",
-                    monto = totalCaja,
-                    colorFondo = MaterialTheme.colorScheme.primaryContainer,
-                    colorTexto = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.fillMaxWidth().height(100.dp)
+                // --- DASHBOARD DE RESULTADOS ---
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = if (gananciaNeta >= 0) Color(0xFFE8F5E9) else Color(0xFFFFEBEE))
                 ) {
-                    categoriaSeleccionada = "Total General"
-                    mostrarBottomSheet = true
+                    Column(modifier = Modifier.padding(16.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("GANANCIA LÍQUIDA", fontWeight = FontWeight.Bold, color = if (gananciaNeta >= 0) Color(0xFF2E7D32) else Color(0xFFC62828))
+                        Text("S/. ${"%.2f".format(gananciaNeta)}", fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = if (gananciaNeta >= 0) Color(0xFF2E7D32) else Color(0xFFC62828))
+                    }
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    CuadroReporte(
-                        titulo = "Efectivo", monto = totalEfectivo, colorFondo = Color(0xFFE8F5E9), colorTexto = Color(0xFF2E7D32),
-                        modifier = Modifier.weight(1f).height(90.dp)
-                    ) { categoriaSeleccionada = "Efectivo"; mostrarBottomSheet = true }
+                    CuadroReporte(titulo = "Ingresos", monto = totalIngresos, colorFondo = Color(0xFFE3F2FD), colorTexto = Color(0xFF1565C0), modifier = Modifier.weight(1f).height(80.dp)) {}
+                    CuadroReporte(titulo = "Gastos (Mercado)", monto = totalGastos, colorFondo = Color(0xFFFFF3E0), colorTexto = Color(0xFFE65100), modifier = Modifier.weight(1f).height(80.dp)) {}
+                }
 
-                    CuadroReporte(
-                        titulo = "Yape", monto = totalYape, colorFondo = Color(0xFFF3E5F5), colorTexto = Color(0xFF6A1B9A),
-                        modifier = Modifier.weight(1f).height(90.dp)
-                    ) { categoriaSeleccionada = "Yape"; mostrarBottomSheet = true }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("Desglose de Ingresos", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    CuadroReporte("Efectivo", ventasEfectivo.sumOf { it.montoTotal }, Color(0xFFF1F8E9), Color(0xFF33691E), Modifier.weight(1f).height(70.dp)) { categoriaSeleccionada = "Efectivo"; mostrarBottomSheet = true }
+                    CuadroReporte("Yape", ventasYape.sumOf { it.montoTotal }, Color(0xFFF3E5F5), Color(0xFF6A1B9A), Modifier.weight(1f).height(70.dp)) { categoriaSeleccionada = "Yape"; mostrarBottomSheet = true }
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    CuadroReporte(
-                        titulo = "Plin", monto = totalPlin, colorFondo = Color(0xFFE0F7FA), colorTexto = Color(0xFF00838F),
-                        modifier = Modifier.weight(1f).height(90.dp)
-                    ) { categoriaSeleccionada = "Plin"; mostrarBottomSheet = true }
-
-                    CuadroReporte(
-                        titulo = "Fiados", monto = totalFiado, colorFondo = Color(0xFFFFEBEE), colorTexto = Color(0xFFC62828),
-                        modifier = Modifier.weight(1f).height(90.dp)
-                    ) { categoriaSeleccionada = "Fiados"; mostrarBottomSheet = true }
+                    CuadroReporte("Plin", ventasPlin.sumOf { it.montoTotal }, Color(0xFFE0F7FA), Color(0xFF00838F), Modifier.weight(1f).height(70.dp)) { categoriaSeleccionada = "Plin"; mostrarBottomSheet = true }
+                    CuadroReporte("Fiados", ventasFiado.sumOf { it.montoTotal }, Color(0xFFFFEBEE), Color(0xFFC62828), Modifier.weight(1f).height(70.dp)) { categoriaSeleccionada = "Fiados"; mostrarBottomSheet = true }
                 }
             }
         }
 
-        // --- PANEL DESLIZABLE COMPARTIDO POR CONTEXTO ---
+        // --- BOTTOM SHEET (Casi idéntico, solo adaptado) ---
         if (mostrarBottomSheet) {
             val ventasAMostrar = when (categoriaSeleccionada) {
                 "Efectivo" -> ventasEfectivo
                 "Yape" -> ventasYape
                 "Plin" -> ventasPlin
                 "Fiados" -> ventasFiado
-                else -> listaVentas
+                else -> ventasFiltradas
             }
 
-            ModalBottomSheet(
-                onDismissRequest = { mostrarBottomSheet = false },
-                sheetState = sheetState
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 8.dp)
-                        .padding(bottom = 32.dp)
-                ) {
-                    Text(
-                        text = "Pedidos en $categoriaSeleccionada",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+            ModalBottomSheet(onDismissRequest = { mostrarBottomSheet = false }, sheetState = sheetState) {
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp).padding(bottom = 32.dp)) {
+                    Text(text = "Pedidos pagados con $categoriaSeleccionada", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
                     if (ventasAMostrar.isEmpty()) {
-                        Text(
-                            text = "No hay platos vendidos bajo este método hoy.",
-                            modifier = Modifier.padding(vertical = 16.dp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Text("No hay registros en este periodo.", modifier = Modifier.padding(vertical = 16.dp))
                     } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxHeight(0.6f),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
+                        LazyColumn(modifier = Modifier.fillMaxHeight(0.6f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(ventasAMostrar) { venta ->
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(12.dp).fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(Icons.Default.Receipt, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                                    Row(modifier = Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Receipt, null, tint = MaterialTheme.colorScheme.primary)
                                         Spacer(modifier = Modifier.width(12.dp))
                                         Column {
-                                            Text(
-                                                text = venta.detalles.takeIf { !it.isNullOrBlank() } ?: "Sin detalles de platos",
-                                                fontWeight = FontWeight.SemiBold,
-                                                fontSize = 16.sp
-                                            )
-                                            Text(
-                                                text = "Monto: S/. ${venta.montoTotal}",
-                                                color = MaterialTheme.colorScheme.secondary,
-                                                fontSize = 14.sp
-                                            )
+                                            Text(text = venta.detalles.takeIf { !it.isNullOrBlank() } ?: "Sin detalles", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                                            Text(text = "Monto: S/. ${venta.montoTotal}", color = MaterialTheme.colorScheme.secondary, fontSize = 14.sp)
                                         }
                                     }
                                 }
                             }
                         }
                     }
-
                     Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = { mostrarBottomSheet = false }, modifier = Modifier.fillMaxWidth()) {
-                        Text("Cerrar")
-                    }
+                    Button(onClick = { mostrarBottomSheet = false }, modifier = Modifier.fillMaxWidth()) { Text("Cerrar") }
                 }
             }
         }
@@ -230,27 +221,16 @@ fun ReportesScreen() {
 }
 
 @Composable
-fun CuadroReporte(
-    titulo: String,
-    monto: Double,
-    colorFondo: Color,
-    colorTexto: Color,
-    modifier: Modifier = Modifier,
-    alPresionar: () -> Unit
-) {
+fun CuadroReporte(titulo: String, monto: Double, colorFondo: Color, colorTexto: Color, modifier: Modifier = Modifier, alPresionar: () -> Unit) {
     Card(
         modifier = modifier.clickable { alPresionar() },
         colors = CardDefaults.cardColors(containerColor = colorFondo),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(text = titulo, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = colorTexto)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(text = "S/. $monto", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = colorTexto)
+        Column(modifier = Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(text = titulo, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colorTexto)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(text = "S/. ${"%.1f".format(monto)}", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = colorTexto)
         }
     }
 }

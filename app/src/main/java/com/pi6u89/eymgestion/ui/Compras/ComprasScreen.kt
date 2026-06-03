@@ -1,5 +1,7 @@
-package com.pi6u89.eymgestion.ui.Compras
+package com.pi6u89.eymgestion.ui.compras
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,7 +22,9 @@ import androidx.compose.ui.unit.sp
 import com.pi6u89.eymgestion.data.ComprasRepository
 import com.pi6u89.eymgestion.domain.ItemCompra
 import kotlinx.coroutines.launch
+import java.time.LocalDate // 👈 IMPORTANTE
 
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ComprasScreen() {
@@ -32,16 +36,12 @@ fun ComprasScreen() {
     var cargando by remember { mutableStateOf(true) }
     var mostrarDialogoAgregar by remember { mutableStateOf(false) }
     var itemParaComprar by remember { mutableStateOf<ItemCompra?>(null) }
+    var procesandoAccion by remember { mutableStateOf(false) }
 
-    // Función segura para recargar datos
     val cargarDatos = {
         coroutineScope.launch {
             cargando = true
-            try {
-                listaItems = comprasRepository.obtenerListaCompras()
-            } catch (e: Exception) {
-                snackbarHostState.showSnackbar("Error al cargar datos: ${e.message}")
-            }
+            try { listaItems = comprasRepository.obtenerListaCompras() } catch (e: Exception) { }
             cargando = false
         }
     }
@@ -50,14 +50,12 @@ fun ComprasScreen() {
 
     val pendientes = listaItems.filter { !it.comprado }
     val comprados = listaItems.filter { it.comprado }
-    val totalGastado = comprados.sumOf { it.costo ?: 0.0 }
+    val totalGastado = comprados.sumOf { it.costo }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            FloatingActionButton(onClick = { mostrarDialogoAgregar = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Añadir")
-            }
+            FloatingActionButton(onClick = { mostrarDialogoAgregar = true }) { Icon(Icons.Default.Add, "Añadir") }
         }
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
@@ -65,62 +63,54 @@ fun ComprasScreen() {
 
             Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Total invertido en insumos:", fontSize = 14.sp)
+                    Text("Total invertido históricamente:", fontSize = 14.sp)
                     Text("S/. ${"%.2f".format(totalGastado)}", fontSize = 28.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
-            if (cargando) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-            } else {
+            if (cargando) CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+            else {
                 LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item { Text("Pendientes", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error) }
-
+                    item { Text("Pendientes para comprar", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error) }
                     items(pendientes) { item ->
                         Card(modifier = Modifier.fillMaxWidth()) {
                             Row(modifier = Modifier.padding(12.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Column {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(item.producto, fontWeight = FontWeight.Bold)
                                     Text("Cant: ${item.cantidad}", fontSize = 12.sp)
                                 }
                                 Row {
-                                    IconButton(onClick = { itemParaComprar = item }) { Icon(Icons.Default.Check, null, tint = Color.Green) }
-                                    IconButton(onClick = {
-                                        coroutineScope.launch {
-                                            try {
-                                                comprasRepository.eliminarItem(item.id)
-                                                cargarDatos()
-                                                snackbarHostState.showSnackbar("Eliminado")
-                                            } catch (e: Exception) {
-                                                snackbarHostState.showSnackbar("Error al eliminar")
+                                    IconButton(onClick = { itemParaComprar = item }) { Icon(Icons.Default.Check, null, tint = Color(0xFF2E7D32)) }
+                                    IconButton(
+                                        enabled = !procesandoAccion,
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                procesandoAccion = true
+                                                if (comprasRepository.eliminarItem(item.id)) { cargarDatos() }
+                                                procesandoAccion = false
                                             }
                                         }
-                                    }) { Icon(Icons.Default.Delete, null, tint = Color.Red) }
+                                    ) { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
                                 }
                             }
                         }
                     }
-
                     item { Spacer(modifier = Modifier.height(16.dp)); Text("Ya comprados", fontWeight = FontWeight.Bold) }
                     items(comprados) { item ->
-                        ListItem(
-                            headlineContent = { Text(item.producto) },
-                            trailingContent = { Text("S/. ${item.costo}", fontWeight = FontWeight.Bold) }
-                        )
+                        ListItem(headlineContent = { Text(item.producto) }, trailingContent = { Text("S/. ${item.costo}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) })
                     }
                 }
             }
         }
     }
 
-    // DIÁLOGO AGREGAR
     if (mostrarDialogoAgregar) {
         var prod by remember { mutableStateOf("") }
         var cant by remember { mutableStateOf("") }
 
         AlertDialog(
-            onDismissRequest = { mostrarDialogoAgregar = false },
-            title = { Text("¿Qué insumo falta?") },
+            onDismissRequest = { if (!procesandoAccion) mostrarDialogoAgregar = false },
+            title = { Text("Apuntar nuevo insumo") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(value = prod, onValueChange = { prod = it }, label = { Text("Producto") }, modifier = Modifier.fillMaxWidth())
@@ -128,60 +118,58 @@ fun ComprasScreen() {
                 }
             },
             confirmButton = {
-                Button(onClick = {
-                    if (prod.isNotBlank() && cant.isNotBlank()) {
+                Button(
+                    enabled = prod.isNotBlank() && cant.isNotBlank() && !procesandoAccion,
+                    onClick = {
                         coroutineScope.launch {
-                            try {
-                                comprasRepository.agregarItem(ItemCompra(producto = prod, cantidad = cant))
+                            procesandoAccion = true
+                            if (comprasRepository.agregarItem(ItemCompra(producto = prod.trim(), cantidad = cant.trim()))) {
                                 cargarDatos()
                                 mostrarDialogoAgregar = false
-                            } catch (e: Exception) {
-                                snackbarHostState.showSnackbar("Error al agregar: ${e.message}")
                             }
+                            procesandoAccion = false
                         }
-                    }
-                }) { Text("Apuntar") }
+                    }) { Text("Guardar") }
             },
-            dismissButton = { TextButton(onClick = { mostrarDialogoAgregar = false }) { Text("Cancelar") } }
+            dismissButton = { if (!procesandoAccion) TextButton(onClick = { mostrarDialogoAgregar = false }) { Text("Cancelar") } }
         )
     }
 
-    // DIÁLOGO COMPRAR
     itemParaComprar?.let { item ->
         var costoInput by remember { mutableStateOf("") }
 
         AlertDialog(
-            onDismissRequest = { itemParaComprar = null },
-            title = { Text("Registrar Gasto: ${item.producto}") },
+            onDismissRequest = { if (!procesandoAccion) itemParaComprar = null },
+            title = { Text("Compraste: ${item.producto}") },
             text = {
                 OutlinedTextField(
-                    value = costoInput,
-                    onValueChange = { costoInput = it },
-                    label = { Text("Costo Total (S/.)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
+                    value = costoInput, onValueChange = { costoInput = it }, label = { Text("Costo Total pagado (S/.)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth()
                 )
             },
             confirmButton = {
-                Button(onClick = {
-                    val c = costoInput.toDoubleOrNull()
-                    if (c != null) {
-                        coroutineScope.launch {
-                            try {
-                                comprasRepository.marcarComoComprado(item.id, c)
-                                itemParaComprar = null
-                                cargarDatos()
-                                snackbarHostState.showSnackbar("Gasto registrado con éxito")
-                            } catch (e: Exception) {
-                                snackbarHostState.showSnackbar("Error al guardar en Supabase")
+                Button(
+                    enabled = costoInput.isNotBlank() && !procesandoAccion,
+                    onClick = {
+                        val c = costoInput.toDoubleOrNull()
+                        if (c != null) {
+                            coroutineScope.launch {
+                                procesandoAccion = true
+                                val fechaHoy = LocalDate.now().toString() // 👈 AQUÍ TOMAMOS LA FECHA
+                                if (comprasRepository.marcarComoComprado(item.id, c, fechaHoy)) {
+                                    itemParaComprar = null
+                                    cargarDatos()
+                                    snackbarHostState.showSnackbar("Gasto registrado")
+                                } else {
+                                    snackbarHostState.showSnackbar("Fallo al guardar.")
+                                }
+                                procesandoAccion = false
                             }
                         }
-                    } else {
-                        coroutineScope.launch { snackbarHostState.showSnackbar("Ingresa un monto válido") }
                     }
-                }) { Text("Confirmar") }
+                ) { Text("Confirmar Gasto") }
             },
-            dismissButton = { TextButton(onClick = { itemParaComprar = null }) { Text("Cancelar") } }
+            dismissButton = { if (!procesandoAccion) TextButton(onClick = { itemParaComprar = null }) { Text("Cancelar") } }
         )
     }
 }
