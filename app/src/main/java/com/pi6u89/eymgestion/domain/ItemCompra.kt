@@ -12,5 +12,5 @@ data class ItemCompra(
     val cantidad: String,
     val comprado: Boolean = false,
     val costo: Double = 0.0,
-    val fecha: String = "" // 👈 ¡AHORA SÍ SE GUARDARÁ EN SUPABASE!
+    val fecha: String = ""
 )

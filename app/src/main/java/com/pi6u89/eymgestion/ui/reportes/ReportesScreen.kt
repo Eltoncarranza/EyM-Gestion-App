@@ -81,9 +81,19 @@ fun ReportesScreen() {
     }
 
     // 2. FILTRAMOS LAS LISTAS USANDO EL RANGO (Ingresos vs Gastos)
+    // 👈 ESTE FILTRO ES A PRUEBA DE ERRORES: Ignora la hora y compara solo fechas
     val ventasFiltradas = todasLasVentas.filter { venta ->
-        val fechaVenta = try { LocalDate.parse(venta.fecha) } catch (e: Exception) { null }
-        fechaVenta != null && !fechaVenta.isBefore(fechaInicio) && !fechaVenta.isAfter(fechaFin)
+        if (venta.fecha.isNullOrBlank()) false
+        else {
+            try {
+                // Tomamos solo los primeros 10 caracteres (YYYY-MM-DD) para ignorar horas o zonas horarias
+                val soloFecha = venta.fecha.take(10)
+                val fechaVenta = LocalDate.parse(soloFecha)
+                !fechaVenta.isBefore(fechaInicio) && !fechaVenta.isAfter(fechaFin)
+            } catch (e: Exception) {
+                false // Si hay un formato raro, simplemente ignora esa venta y no bloquea el reporte
+            }
+        }
     }
 
     val comprasFiltradas = todasLasCompras.filter { compra ->
