@@ -7,46 +7,48 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class ComprasRepository {
-    private val TAG = "DEBUG_COMPRAS"
 
-    suspend fun obtenerListaCompras(): List<ItemCompra> {
-        return withContext(Dispatchers.IO) {
-            try {
-                SupabaseClient.client.postgrest["lista_compras"].select().decodeList<ItemCompra>()
-            } catch (e: Exception) { emptyList() }
+    suspend fun obtenerListaCompras(): List<ItemCompra> = withContext(Dispatchers.IO) {
+        try {
+            SupabaseClient.client.postgrest["lista_compras"].select().decodeList<ItemCompra>()
+        } catch (e: Exception) {
+            Log.e("ComprasRepo", "Error al obtener compras: ${e.message}", e)
+            emptyList()
         }
     }
 
-    // 👈 AHORA RECIBE LA FECHA DE HOY
-    suspend fun marcarComoComprado(id: Int, nuevoCosto: Double, fechaHoy: String): Boolean {
-        return withContext(Dispatchers.IO) {
+    suspend fun marcarComoComprado(id: Int, nuevoCosto: Double, fechaHoy: String): Boolean =
+        withContext(Dispatchers.IO) {
             try {
-                SupabaseClient.client.postgrest["lista_compras"]
-                    .update({
-                        set("comprado", true)
-                        set("costo", nuevoCosto)
-                        set("fecha", fechaHoy) // 👈 SE GUARDA LA FECHA EN BASE DE DATOS
-                    }) { filter { eq("id", id) } }
+                SupabaseClient.client.postgrest["lista_compras"].update({
+                    set("comprado", true)
+                    set("costo", nuevoCosto)
+                    set("fecha", fechaHoy)
+                }) { filter { eq("id", id) } }
                 true
-            } catch (e: Exception) { false }
+            } catch (e: Exception) {
+                Log.e("ComprasRepo", "Error al marcar comprado id=$id: ${e.message}", e)
+                false
+            }
+        }
+
+    suspend fun agregarItem(item: ItemCompra): Boolean = withContext(Dispatchers.IO) {
+        try {
+            SupabaseClient.client.postgrest["lista_compras"].insert(item)
+            true
+        } catch (e: Exception) {
+            Log.e("ComprasRepo", "Error al agregar item: ${e.message}", e)
+            false
         }
     }
 
-    suspend fun agregarItem(item: ItemCompra): Boolean {
-        return withContext(Dispatchers.IO) {
-            try {
-                SupabaseClient.client.postgrest["lista_compras"].insert(item)
-                true
-            } catch (e: Exception) { false }
-        }
-    }
-
-    suspend fun eliminarItem(id: Int): Boolean {
-        return withContext(Dispatchers.IO) {
-            try {
-                SupabaseClient.client.postgrest["lista_compras"].delete { filter { eq("id", id) } }
-                true
-            } catch (e: Exception) { false }
+    suspend fun eliminarItem(id: Int): Boolean = withContext(Dispatchers.IO) {
+        try {
+            SupabaseClient.client.postgrest["lista_compras"].delete { filter { eq("id", id) } }
+            true
+        } catch (e: Exception) {
+            Log.e("ComprasRepo", "Error al eliminar id=$id: ${e.message}", e)
+            false
         }
     }
 }

@@ -8,9 +8,9 @@ import kotlinx.serialization.Serializable
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class Fiado(
-    @EncodeDefault(EncodeDefault.Mode.NEVER) val id: Int = 0, // 👈 EL TRUCO ESTÁ AQUÍ
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val id: Int = 0,
     @SerialName("cliente_id") val clienteId: Int,
     val monto: Double,
-    val fecha: String,
+    val fecha: String? = null,
     val pagado: Boolean = false
 )

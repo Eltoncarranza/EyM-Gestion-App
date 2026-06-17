@@ -11,6 +11,6 @@ data class ItemCompra(
     val producto: String,
     val cantidad: String,
     val comprado: Boolean = false,
-    val costo: Double = 0.0,
-    val fecha: String = ""
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val costo: Double = 0.0,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val fecha: String? = null
 )

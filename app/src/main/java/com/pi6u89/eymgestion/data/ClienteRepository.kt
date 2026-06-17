@@ -12,62 +12,96 @@ import kotlinx.coroutines.withContext
 class ClienteRepository {
 
     suspend fun obtenerClientes(): List<Cliente> = withContext(Dispatchers.IO) {
-        try { SupabaseClient.client.postgrest["clientes"].select().decodeList<Cliente>() } catch (e: Exception) { emptyList() }
+        try {
+            SupabaseClient.client.postgrest["clientes"].select().decodeList<Cliente>()
+        } catch (e: Exception) {
+            Log.e("ClienteRepo", "Error al obtener clientes: ${e.message}", e)
+            emptyList()
+        }
     }
 
     suspend fun agregarCliente(cliente: Cliente): Boolean = withContext(Dispatchers.IO) {
-        try { SupabaseClient.client.postgrest["clientes"].insert(cliente); true } catch (e: Exception) { false }
+        try {
+            SupabaseClient.client.postgrest["clientes"].insert(cliente)
+            true
+        } catch (e: Exception) {
+            Log.e("ClienteRepo", "Error al agregar cliente: ${e.message}", e)
+            false
+        }
     }
 
     suspend fun obtenerDeudasActivas(): List<Fiado> = withContext(Dispatchers.IO) {
-        try { SupabaseClient.client.postgrest["fiados"].select { filter { eq("pagado", false) } }.decodeList<Fiado>() } catch (e: Exception) { emptyList() }
+        try {
+            SupabaseClient.client.postgrest["fiados"]
+                .select { filter { eq("pagado", false) } }
+                .decodeList<Fiado>()
+        } catch (e: Exception) {
+            Log.e("ClienteRepo", "Error al obtener deudas: ${e.message}", e)
+            emptyList()
+        }
     }
 
     suspend fun obtenerPlatosSinDevolver(): List<PlatoPrestado> = withContext(Dispatchers.IO) {
-        try { SupabaseClient.client.postgrest["platos_prestados"].select { filter { eq("devuelto", false) } }.decodeList<PlatoPrestado>() } catch (e: Exception) { emptyList() }
+        try {
+            SupabaseClient.client.postgrest["platos_prestados"]
+                .select { filter { eq("devuelto", false) } }
+                .decodeList<PlatoPrestado>()
+        } catch (e: Exception) {
+            Log.e("ClienteRepo", "Error al obtener platos: ${e.message}", e)
+            emptyList()
+        }
     }
 
     suspend fun registrarDevolucionPlatos(clienteId: Int): Boolean = withContext(Dispatchers.IO) {
         try {
-            SupabaseClient.client.postgrest["platos_prestados"].update({ set("devuelto", true) }) { filter { eq("cliente_id", clienteId); eq("devuelto", false) } }
+            SupabaseClient.client.postgrest["platos_prestados"].update({
+                set("devuelto", true)
+            }) { filter { eq("cliente_id", clienteId); eq("devuelto", false) } }
             true
-        } catch (e: Exception) { false }
+        } catch (e: Exception) {
+            Log.e("ClienteRepo", "Error al registrar devolución: ${e.message}", e)
+            false
+        }
     }
 
-    // 👈 ESTA ES LA FUNCIÓN ESTRELLA QUE MANEJA LOS PAGOS PARCIALES
-    suspend fun registrarAbonoDeuda(clienteId: Int, montoPagado: Double, metodoPago: String, fecha: String): Boolean {
-        return withContext(Dispatchers.IO) {
-            try {
-                // 1. Obtener los fiados pendientes del cliente ordenados del más antiguo al más nuevo
-                val fiadosPendientes = SupabaseClient.client.postgrest["fiados"]
-                    .select { filter { eq("cliente_id", clienteId); eq("pagado", false) } }
-                    .decodeList<Fiado>()
-                    .sortedBy { it.id }
+    suspend fun registrarAbonoDeuda(
+        clienteId: Int,
+        montoPagado: Double,
+        metodoPago: String,
+        fecha: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val fiadosPendientes = SupabaseClient.client.postgrest["fiados"]
+                .select { filter { eq("cliente_id", clienteId); eq("pagado", false) } }
+                .decodeList<Fiado>()
+                .sortedBy { it.id }
 
-                var saldoAbono = montoPagado
+            if (fiadosPendientes.isEmpty()) {
+                Log.w("ClienteRepo", "No hay deudas pendientes para clienteId=$clienteId")
+                return@withContext false
+            }
 
-                // 2. Repartir el pago entre las deudas existentes
-                for (fiado in fiadosPendientes) {
-                    if (saldoAbono <= 0) break // Si ya se gastó todo el abono, salimos
+            var saldoAbono = montoPagado
 
-                    if (saldoAbono >= fiado.monto) {
-                        // El abono alcanza para pagar ESTA deuda completa
-                        saldoAbono -= fiado.monto
-                        SupabaseClient.client.postgrest["fiados"].update({
-                            set("pagado", true)
-                        }) { filter { eq("id", fiado.id) } }
-                    } else {
-                        // El abono NO alcanza para pagarla toda. Hacemos un pago parcial.
-                        val nuevoMonto = fiado.monto - saldoAbono
-                        saldoAbono = 0.0
-                        SupabaseClient.client.postgrest["fiados"].update({
-                            set("monto", nuevoMonto)
-                        }) { filter { eq("id", fiado.id) } }
-                    }
+            for (fiado in fiadosPendientes) {
+                if (saldoAbono <= 0.0) break
+
+                if (saldoAbono >= fiado.monto) {
+                    saldoAbono -= fiado.monto
+                    SupabaseClient.client.postgrest["fiados"].update({
+                        set("pagado", true)
+                    }) { filter { eq("id", fiado.id) } }
+                } else {
+                    val nuevoMonto = fiado.monto - saldoAbono
+                    saldoAbono = 0.0
+                    SupabaseClient.client.postgrest["fiados"].update({
+                        set("monto", nuevoMonto)
+                    }) { filter { eq("id", fiado.id) } }
                 }
+            }
 
-                // 3. Registrar el ingreso de dinero como una Venta para que cuadre en "Reportes"
-                val ingresoVenta = Venta(
+            SupabaseClient.client.postgrest["ventas"].insert(
+                Venta(
                     montoTotal = montoPagado,
                     metodoPago = metodoPago,
                     estadoPago = "PAGADO",
@@ -75,13 +109,12 @@ class ClienteRepository {
                     fecha = fecha,
                     detalles = "Abono de deuda fiada"
                 )
-                SupabaseClient.client.postgrest["ventas"].insert(ingresoVenta)
+            )
 
-                true
-            } catch (e: Exception) {
-                Log.e("CLIENTE_REPO", "Error al abonar: ${e.message}")
-                false
-            }
+            true
+        } catch (e: Exception) {
+            Log.e("ClienteRepo", "Error al abonar deuda: ${e.message}", e)
+            false
         }
     }
 }

@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.sp
 import com.pi6u89.eymgestion.data.ComprasRepository
 import com.pi6u89.eymgestion.domain.ItemCompra
 import kotlinx.coroutines.launch
-import java.time.LocalDate // 👈 IMPORTANTE
+import java.time.LocalDate
 
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -34,16 +34,14 @@ fun ComprasScreen() {
 
     var listaItems by remember { mutableStateOf<List<ItemCompra>>(emptyList()) }
     var cargando by remember { mutableStateOf(true) }
+    var procesandoAccion by remember { mutableStateOf(false) }
     var mostrarDialogoAgregar by remember { mutableStateOf(false) }
     var itemParaComprar by remember { mutableStateOf<ItemCompra?>(null) }
-    var procesandoAccion by remember { mutableStateOf(false) }
 
-    val cargarDatos = {
-        coroutineScope.launch {
-            cargando = true
-            try { listaItems = comprasRepository.obtenerListaCompras() } catch (e: Exception) { }
-            cargando = false
-        }
+    suspend fun cargarDatos() {
+        cargando = true
+        listaItems = comprasRepository.obtenerListaCompras()
+        cargando = false
     }
 
     LaunchedEffect(Unit) { cargarDatos() }
@@ -55,49 +53,132 @@ fun ComprasScreen() {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            FloatingActionButton(onClick = { mostrarDialogoAgregar = true }) { Icon(Icons.Default.Add, "Añadir") }
+            FloatingActionButton(onClick = { mostrarDialogoAgregar = true }) {
+                Icon(Icons.Default.Add, contentDescription = "Añadir")
+            }
         }
     ) { paddingValues ->
-        Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp)
+        ) {
             Text(text = "Abastecimiento", fontSize = 24.sp, fontWeight = FontWeight.Bold)
 
-            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Total invertido históricamente:", fontSize = 14.sp)
-                    Text("S/. ${"%.2f".format(totalGastado)}", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                    Text("Total invertido (historial):", fontSize = 14.sp)
+                    Text(
+                        "S/. ${"%.2f".format(totalGastado)}",
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
 
-            if (cargando) CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-            else {
-                LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item { Text("Pendientes para comprar", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error) }
-                    items(pendientes) { item ->
+            if (cargando) {
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item {
+                        Text(
+                            "Pendientes para comprar",
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+
+                    if (pendientes.isEmpty()) {
+                        item {
+                            Text(
+                                "No hay insumos pendientes.",
+                                color = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
+                    }
+
+                    items(pendientes, key = { it.id }) { item ->
                         Card(modifier = Modifier.fillMaxWidth()) {
-                            Row(modifier = Modifier.padding(12.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                modifier = Modifier
+                                    .padding(12.dp)
+                                    .fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(item.producto, fontWeight = FontWeight.Bold)
                                     Text("Cant: ${item.cantidad}", fontSize = 12.sp)
                                 }
                                 Row {
-                                    IconButton(onClick = { itemParaComprar = item }) { Icon(Icons.Default.Check, null, tint = Color(0xFF2E7D32)) }
+                                    IconButton(onClick = { itemParaComprar = item }) {
+                                        Icon(Icons.Default.Check, null, tint = Color(0xFF2E7D32))
+                                    }
                                     IconButton(
                                         enabled = !procesandoAccion,
                                         onClick = {
                                             coroutineScope.launch {
                                                 procesandoAccion = true
-                                                if (comprasRepository.eliminarItem(item.id)) { cargarDatos() }
+                                                val ok = comprasRepository.eliminarItem(item.id)
+                                                if (ok) {
+                                                    cargarDatos()
+                                                } else {
+                                                    snackbarHostState.showSnackbar("Error al eliminar")
+                                                }
                                                 procesandoAccion = false
                                             }
                                         }
-                                    ) { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Delete,
+                                            null,
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
-                    item { Spacer(modifier = Modifier.height(16.dp)); Text("Ya comprados", fontWeight = FontWeight.Bold) }
-                    items(comprados) { item ->
-                        ListItem(headlineContent = { Text(item.producto) }, trailingContent = { Text("S/. ${item.costo}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) })
+
+                    item {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Ya comprados", fontWeight = FontWeight.Bold)
+                    }
+
+                    if (comprados.isEmpty()) {
+                        item {
+                            Text(
+                                "Sin compras registradas aún.",
+                                color = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
+                    }
+
+                    items(comprados, key = { it.id }) { item ->
+                        ListItem(
+                            headlineContent = { Text(item.producto) },
+                            supportingContent = {
+                                Text(item.fecha ?: "", fontSize = 12.sp)
+                            },
+                            trailingContent = {
+                                Text(
+                                    "S/. ${"%.2f".format(item.costo)}",
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        )
                     }
                 }
             }
@@ -113,8 +194,20 @@ fun ComprasScreen() {
             title = { Text("Apuntar nuevo insumo") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = prod, onValueChange = { prod = it }, label = { Text("Producto") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(value = cant, onValueChange = { cant = it }, label = { Text("Cantidad") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(
+                        value = prod,
+                        onValueChange = { prod = it },
+                        label = { Text("Producto") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = cant,
+                        onValueChange = { cant = it },
+                        label = { Text("Cantidad") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             },
             confirmButton = {
@@ -123,15 +216,25 @@ fun ComprasScreen() {
                     onClick = {
                         coroutineScope.launch {
                             procesandoAccion = true
-                            if (comprasRepository.agregarItem(ItemCompra(producto = prod.trim(), cantidad = cant.trim()))) {
+                            val ok = comprasRepository.agregarItem(
+                                ItemCompra(producto = prod.trim(), cantidad = cant.trim())
+                            )
+                            if (ok) {
                                 cargarDatos()
                                 mostrarDialogoAgregar = false
+                            } else {
+                                snackbarHostState.showSnackbar("Error al guardar")
                             }
                             procesandoAccion = false
                         }
-                    }) { Text("Guardar") }
+                    }
+                ) { Text("Guardar") }
             },
-            dismissButton = { if (!procesandoAccion) TextButton(onClick = { mostrarDialogoAgregar = false }) { Text("Cancelar") } }
+            dismissButton = {
+                if (!procesandoAccion) {
+                    TextButton(onClick = { mostrarDialogoAgregar = false }) { Text("Cancelar") }
+                }
+            }
         )
     }
 
@@ -143,33 +246,46 @@ fun ComprasScreen() {
             title = { Text("Compraste: ${item.producto}") },
             text = {
                 OutlinedTextField(
-                    value = costoInput, onValueChange = { costoInput = it }, label = { Text("Costo Total pagado (S/.)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth()
+                    value = costoInput,
+                    onValueChange = { costoInput = it },
+                    label = { Text("Costo total pagado (S/.)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
             },
             confirmButton = {
                 Button(
                     enabled = costoInput.isNotBlank() && !procesandoAccion,
                     onClick = {
-                        val c = costoInput.toDoubleOrNull()
-                        if (c != null) {
+                        val costo = costoInput.toDoubleOrNull()
+                        if (costo == null || costo <= 0.0) {
                             coroutineScope.launch {
-                                procesandoAccion = true
-                                val fechaHoy = LocalDate.now().toString() // 👈 AQUÍ TOMAMOS LA FECHA
-                                if (comprasRepository.marcarComoComprado(item.id, c, fechaHoy)) {
-                                    itemParaComprar = null
-                                    cargarDatos()
-                                    snackbarHostState.showSnackbar("Gasto registrado")
-                                } else {
-                                    snackbarHostState.showSnackbar("Fallo al guardar.")
-                                }
-                                procesandoAccion = false
+                                snackbarHostState.showSnackbar("Ingresa un monto válido")
                             }
+                            return@Button
+                        }
+                        coroutineScope.launch {
+                            procesandoAccion = true
+                            val fechaHoy = LocalDate.now().toString()
+                            val ok = comprasRepository.marcarComoComprado(item.id, costo, fechaHoy)
+                            if (ok) {
+                                itemParaComprar = null
+                                cargarDatos()
+                                snackbarHostState.showSnackbar("Gasto registrado")
+                            } else {
+                                snackbarHostState.showSnackbar("Error al guardar")
+                            }
+                            procesandoAccion = false
                         }
                     }
                 ) { Text("Confirmar Gasto") }
             },
-            dismissButton = { if (!procesandoAccion) TextButton(onClick = { itemParaComprar = null }) { Text("Cancelar") } }
+            dismissButton = {
+                if (!procesandoAccion) {
+                    TextButton(onClick = { itemParaComprar = null }) { Text("Cancelar") }
+                }
+            }
         )
     }
 }

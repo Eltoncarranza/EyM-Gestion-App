@@ -44,7 +44,6 @@ import kotlinx.serialization.json.Json
 import java.time.LocalDate
 import java.util.UUID
 
-// 👈 AGREGADO @Serializable PARA PODER GUARDARLOS EN MEMORIA
 @Serializable
 data class ItemCarrito(
     val nombre: String,
@@ -54,7 +53,6 @@ data class ItemCarrito(
     val total: Double get() = cantidad * precioUnitario
 }
 
-// 👈 AGREGADO @Serializable PARA PODER GUARDARLOS EN MEMORIA
 @Serializable
 data class PedidoGuardado(
     val id: String,
@@ -100,7 +98,7 @@ fun VentaScreen() {
                     cajaAbierta = cajaAbierta,
                     fechaJornada = fechaJornada,
                     snackbarHostState = snackbarHostState,
-                    cajaManager = cajaManager, // 👈 Pasamos el manager a la vista
+                    cajaManager = cajaManager,
                     alCerrarCaja = {
                         coroutineScope.launch {
                             cajaManager.cerrarCaja()
@@ -126,23 +124,38 @@ fun VistaApertura(alAbrirCaja: (Set<String>) -> Unit) {
     var padrastro by remember { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         Text(text = "Caja Cerrada", fontSize = 24.sp, fontWeight = FontWeight.Bold)
 
-        Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(text = "Sencillo en Caja (Efectivo)", fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
-                    value = efectivoInicial, onValueChange = { efectivoInicial = it },
-                    label = { Text("Monto en Soles (S/.)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth(), singleLine = true
+                    value = efectivoInicial,
+                    onValueChange = { efectivoInicial = it },
+                    label = { Text("Monto en Soles (S/.)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
             }
         }
 
-        Text(text = "🍲 ¿Qué se cocina hoy?", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Text(
+            text = "¿Qué se cocina hoy?",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
         FilaPlato("Tallarín (S/. 5.00)", tallarin) { tallarin = it }
         FilaPlato("Caldo de Pollo (S/. 5.00)", caldoPollo) { caldoPollo = it }
         FilaPlato("Salchipollo (S/. 10.00)", salchipollo) { salchipollo = it }
@@ -163,8 +176,12 @@ fun VistaApertura(alAbrirCaja: (Set<String>) -> Unit) {
                 if (padrastro) activos.add("Padrastro")
                 alAbrirCaja(activos)
             },
-            modifier = Modifier.fillMaxWidth().height(56.dp)
-        ) { Text("Abrir Caja e Iniciar Día", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+        ) {
+            Text("Abrir Caja e Iniciar Día", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }
 
@@ -184,18 +201,13 @@ fun VistaPuntoDeVenta(
     var carrito by remember { mutableStateOf(listOf<ItemCarrito>()) }
     val totalMonto = carrito.sumOf { it.total }
 
-    // 👈 MAGIA: LEEMOS LOS PEDIDOS DESDE LA MEMORIA DEL TELÉFONO
     val pedidosJson by cajaManager.pedidosGuardadosFlow.collectAsState(initial = "[]")
     val pedidosGuardados = remember(pedidosJson) {
-        try {
-            Json.decodeFromString<List<PedidoGuardado>>(pedidosJson)
-        } catch (e: Exception) {
-            emptyList()
-        }
+        try { Json.decodeFromString<List<PedidoGuardado>>(pedidosJson) }
+        catch (e: Exception) { emptyList() }
     }
 
     var mostrarDialogoGuardarPedido by remember { mutableStateOf(false) }
-
     val ventasRepository = remember { VentasRepository() }
     val coroutineScope = rememberCoroutineScope()
     var mostrarDialogoPago by remember { mutableStateOf(false) }
@@ -204,31 +216,52 @@ fun VistaPuntoDeVenta(
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = "Jornada: ${fechaJornada ?: "Desconocida"}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            OutlinedButton(onClick = { mostrarDialogoCerrarCaja = true }, colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Cerrar Caja") }
+            Text(
+                text = "Jornada: ${fechaJornada ?: LocalDate.now().toString()}",
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            OutlinedButton(
+                onClick = { mostrarDialogoCerrarCaja = true },
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+            ) { Text("Cerrar Caja") }
         }
 
         if (pedidosGuardados.isNotEmpty()) {
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+            ) {
                 Text("Mesas / Pedidos en espera:", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(top = 4.dp)
+                ) {
                     items(pedidosGuardados) { pedido ->
                         Card(
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                            ),
                             modifier = Modifier.clickable {
                                 carrito = pedido.items
-                                // 👈 ACTUALIZAMOS LA MEMORIA AL ELIMINAR EL PEDIDO DE LA ESPERA
                                 val nuevaLista = pedidosGuardados.filter { it.id != pedido.id }
                                 coroutineScope.launch {
                                     cajaManager.actualizarPedidosGuardados(Json.encodeToString(nuevaLista))
                                 }
                             }
                         ) {
-                            Text(text = pedido.nombreReferencia, modifier = Modifier.padding(12.dp), fontWeight = FontWeight.Bold)
+                            Text(
+                                text = pedido.nombreReferencia,
+                                modifier = Modifier.padding(12.dp),
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }
@@ -237,7 +270,11 @@ fun VistaPuntoDeVenta(
 
         TabRow(selectedTabIndex = tabSeleccionado) {
             tabs.forEachIndexed { index, titulo ->
-                Tab(selected = tabSeleccionado == index, onClick = { tabSeleccionado = index }, text = { Text(titulo, fontWeight = FontWeight.Bold, fontSize = 16.sp) })
+                Tab(
+                    selected = tabSeleccionado == index,
+                    onClick = { tabSeleccionado = index },
+                    text = { Text(titulo, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
+                )
             }
         }
 
@@ -250,12 +287,27 @@ fun VistaPuntoDeVenta(
         }
 
         if (carrito.isNotEmpty()) {
-            Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth(), tonalElevation = 8.dp) {
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.fillMaxWidth(),
+                tonalElevation = 8.dp
+            ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = "Pedido Actual", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
-
-                        OutlinedButton(onClick = { mostrarDialogoGuardarPedido = true }, modifier = Modifier.height(36.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Pedido Actual",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        OutlinedButton(
+                            onClick = { mostrarDialogoGuardarPedido = true },
+                            modifier = Modifier.height(36.dp)
+                        ) {
                             Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
                             Text("Guardar Mesa")
@@ -263,13 +315,40 @@ fun VistaPuntoDeVenta(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 140.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 140.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                         itemsIndexed(carrito) { index, item ->
-                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text(text = "${item.cantidad}x ${item.nombre}", modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(text = "S/. ${item.total}", fontWeight = FontWeight.Medium, modifier = Modifier.padding(horizontal = 8.dp))
-                                IconButton(onClick = { carrito = carrito.filterIndexed { i, _ -> i != index } }, modifier = Modifier.size(24.dp)) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = MaterialTheme.colorScheme.error)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "${item.cantidad}x ${item.nombre}",
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "S/. ${"%.2f".format(item.total)}",
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                )
+                                IconButton(
+                                    onClick = { carrito = carrito.filterIndexed { i, _ -> i != index } },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = "Eliminar",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
                                 }
                             }
                         }
@@ -277,11 +356,25 @@ fun VistaPuntoDeVenta(
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = "Total: S/. $totalMonto", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                        Button(onClick = { mostrarDialogoPago = true }, modifier = Modifier.height(50.dp)) { Text("COBRAR", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Total: S/. ${"%.2f".format(totalMonto)}",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Button(
+                            onClick = { mostrarDialogoPago = true },
+                            modifier = Modifier.height(50.dp)
+                        ) { Text("COBRAR", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
                     }
-                    TextButton(onClick = { carrito = emptyList() }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Vaciar todo el pedido", color = MaterialTheme.colorScheme.error) }
+                    TextButton(
+                        onClick = { carrito = emptyList() },
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    ) { Text("Vaciar todo el pedido", color = MaterialTheme.colorScheme.error) }
                 }
             }
         }
@@ -305,50 +398,82 @@ fun VistaPuntoDeVenta(
                 Button(
                     enabled = nombreMesa.isNotBlank(),
                     onClick = {
-                        val nuevoPedido = PedidoGuardado(id = UUID.randomUUID().toString(), nombreReferencia = nombreMesa, items = carrito)
+                        val nuevoPedido = PedidoGuardado(
+                            id = UUID.randomUUID().toString(),
+                            nombreReferencia = nombreMesa,
+                            items = carrito
+                        )
                         val nuevaLista = pedidosGuardados + nuevoPedido
-
-                        // 👈 ACTUALIZAMOS LA MEMORIA CON EL NUEVO PEDIDO
                         coroutineScope.launch {
                             cajaManager.actualizarPedidosGuardados(Json.encodeToString(nuevaLista))
                             carrito = emptyList()
                             mostrarDialogoGuardarPedido = false
-                            snackbarHostState.showSnackbar("Pedido guardado en disco. Seguro contra cierres.")
+                            snackbarHostState.showSnackbar("Pedido guardado. Seguro contra cierres.")
                         }
                     }
                 ) { Text("Guardar") }
             },
-            dismissButton = { TextButton(onClick = { mostrarDialogoGuardarPedido = false }) { Text("Cancelar") } }
+            dismissButton = {
+                TextButton(onClick = { mostrarDialogoGuardarPedido = false }) { Text("Cancelar") }
+            }
         )
     }
 
-    // EL RESTO SIGUE IGUAL
     if (mostrarDialogoPago) {
         DialogoPago(
-            totalMonto = totalMonto, clientes = listaClientes, procesandoVenta = procesandoVenta,
+            totalMonto = totalMonto,
+            clientes = listaClientes,
+            procesandoVenta = procesandoVenta,
             alDescartar = { if (!procesandoVenta) mostrarDialogoPago = false },
             alConfirmar = { metodo, prestaPlato, clienteId ->
                 coroutineScope.launch {
                     procesandoVenta = true
-                    val fechaReloj = LocalDate.now().toString()
-                    val fechaParaRegistro = if (cajaAbierta && fechaJornada != null) fechaJornada else fechaReloj
+
+                    // ✅ Garantiza que siempre haya una fecha válida
+                    val fechaParaRegistro = when {
+                        !fechaJornada.isNullOrBlank() -> fechaJornada
+                        else -> LocalDate.now().toString()
+                    }
+
                     val estado = if (metodo == "Fiado") "FIADO" else "PAGADO"
-                    val textoDetalles = carrito.joinToString(separator = ", ") { "${it.cantidad}x ${it.nombre}" }
+                    val textoDetalles = carrito.joinToString(separator = ", ") {
+                        "${it.cantidad}x ${it.nombre}"
+                    }
 
                     val nuevaVenta = Venta(
-                        montoTotal = totalMonto, costoTotal = 0.0, metodoPago = metodo, estadoPago = estado,
-                        prestaPlato = prestaPlato, clienteId = clienteId, fecha = fechaParaRegistro, detalles = textoDetalles
+                        montoTotal = totalMonto,
+                        costoTotal = 0.0,
+                        metodoPago = metodo,
+                        estadoPago = estado,
+                        prestaPlato = prestaPlato,
+                        clienteId = clienteId,
+                        fecha = fechaParaRegistro,
+                        detalles = textoDetalles
                     )
 
                     val exitoVenta = ventasRepository.registrarVenta(nuevaVenta)
 
                     if (exitoVenta) {
-                        if (metodo == "Fiado" && clienteId != null) ventasRepository.registrarFiado(Fiado(clienteId = clienteId, monto = totalMonto, fecha = fechaParaRegistro))
-                        if (prestaPlato && clienteId != null) ventasRepository.registrarPlatoPrestado(PlatoPrestado(clienteId = clienteId, cantidadPlatos = carrito.sumOf { it.cantidad }, fechaPrestamo = fechaParaRegistro))
+                        if (metodo == "Fiado" && clienteId != null) {
+                            ventasRepository.registrarFiado(
+                                Fiado(clienteId = clienteId, monto = totalMonto, fecha = fechaParaRegistro)
+                            )
+                        }
+                        if (prestaPlato && clienteId != null) {
+                            ventasRepository.registrarPlatoPrestado(
+                                PlatoPrestado(
+                                    clienteId = clienteId,
+                                    cantidadPlatos = carrito.sumOf { it.cantidad },
+                                    fechaPrestamo = fechaParaRegistro
+                                )
+                            )
+                        }
                         carrito = emptyList()
                         mostrarDialogoPago = false
-                        snackbarHostState.showSnackbar("✅ Venta registrada con éxito")
-                    } else snackbarHostState.showSnackbar("❌ Error al guardar. Revisa tu conexión.")
+                        snackbarHostState.showSnackbar("Venta registrada con éxito")
+                    } else {
+                        snackbarHostState.showSnackbar("Error al guardar. Revisa tu conexión.")
+                    }
                     procesandoVenta = false
                 }
             }
@@ -359,43 +484,81 @@ fun VistaPuntoDeVenta(
         AlertDialog(
             onDismissRequest = { mostrarDialogoCerrarCaja = false },
             title = { Text("¿Cerrar Caja?") },
-            text = { Text("¿Estás seguro que deseas cerrar la jornada de hoy? Esto limpiará el estado de tu caja y borrará los pedidos en espera no cobrados.") },
-            confirmButton = { Button(colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error), onClick = { alCerrarCaja(); mostrarDialogoCerrarCaja = false }) { Text("Sí, Cerrar Caja") } },
-            dismissButton = { TextButton(onClick = { mostrarDialogoCerrarCaja = false }) { Text("Cancelar") } }
+            text = {
+                Text("¿Seguro que deseas cerrar la jornada de hoy? Se limpiarán los pedidos en espera no cobrados.")
+            },
+            confirmButton = {
+                Button(
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    onClick = { alCerrarCaja(); mostrarDialogoCerrarCaja = false }
+                ) { Text("Sí, Cerrar Caja") }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDialogoCerrarCaja = false }) { Text("Cancelar") }
+            }
         )
     }
 }
 
 @Composable
 fun MenuComida(platosActivos: Set<String>, alAgregarAlCarrito: (ItemCarrito) -> Unit) {
-    val platosMaestros = listOf("Tallarín" to 5.0, "Caldo de Pollo" to 5.0, "Salchipollo" to 10.0, "Trigo con papa" to 5.0, "Patita" to 7.0, "Orejita" to 7.0, "Padrastro" to 7.0)
+    val platosMaestros = listOf(
+        "Tallarín" to 5.0, "Caldo de Pollo" to 5.0, "Salchipollo" to 10.0,
+        "Trigo con papa" to 5.0, "Patita" to 7.0, "Orejita" to 7.0, "Padrastro" to 7.0
+    )
     val platosDeHoy = platosMaestros.filter { platosActivos.contains(it.first) }
-    if (platosDeHoy.isEmpty()) Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No hay platos seleccionados.", color = MaterialTheme.colorScheme.secondary) }
-    else GridProductos(platosDeHoy, alAgregarAlCarrito)
+    if (platosDeHoy.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("No hay platos seleccionados.", color = MaterialTheme.colorScheme.secondary)
+        }
+    } else {
+        GridProductos(platosDeHoy, alAgregarAlCarrito)
+    }
 }
 
 @Composable
 fun MenuCafeteria(alAgregarAlCarrito: (ItemCarrito) -> Unit) {
-    val cafes = listOf("Americano" to 3.0, "Capuchino" to 5.0, "Latte" to 5.0, "Frapuchino" to 7.0, "Moccachino" to 5.0, "Caramel Macchiato" to 5.0, "Café Bombón" to 5.0)
+    val cafes = listOf(
+        "Americano" to 3.0, "Capuchino" to 5.0, "Latte" to 5.0,
+        "Frapuchino" to 7.0, "Moccachino" to 5.0, "Caramel Macchiato" to 5.0, "Café Bombón" to 5.0
+    )
     GridProductos(cafes, alAgregarAlCarrito)
 }
 
 @Composable
 fun MenuBebidas(alAgregarAlCarrito: (ItemCarrito) -> Unit) {
-    val bebidas = listOf("Maracuyá" to 2.0, "Chicha Morada" to 2.0, "Gordita" to 4.0, "Inca 1L" to 5.0, "Coca Cola" to 5.0, "Pepsi 2L" to 6.0)
+    val bebidas = listOf(
+        "Maracuyá" to 2.0, "Chicha Morada" to 2.0, "Gordita" to 4.0,
+        "Inca 1L" to 5.0, "Coca Cola" to 5.0, "Pepsi 2L" to 6.0
+    )
     GridProductos(bebidas, alAgregarAlCarrito)
 }
 
 @Composable
 fun GridProductos(productos: List<Pair<String, Double>>, alAgregarAlCarrito: (ItemCarrito) -> Unit) {
     var productoSeleccionado by remember { mutableStateOf<Pair<String, Double>?>(null) }
-    LazyVerticalGrid(columns = GridCells.Fixed(2), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxSize()
+    ) {
         items(productos) { producto ->
             Card(
-                modifier = Modifier.fillMaxWidth().height(100.dp).clickable { productoSeleccionado = producto },
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .clickable { productoSeleccionado = producto },
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                Column(modifier = Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(8.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     Text(text = producto.first, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(text = "S/. ${producto.second}", color = MaterialTheme.colorScheme.primary)
@@ -404,15 +567,23 @@ fun GridProductos(productos: List<Pair<String, Double>>, alAgregarAlCarrito: (It
         }
     }
     productoSeleccionado?.let { producto ->
-        DialogoCobroProducto(producto = producto, alDescartar = { productoSeleccionado = null }, alConfirmar = { cantidad, precioFinal ->
-            alAgregarAlCarrito(ItemCarrito(producto.first, cantidad, precioFinal))
-            productoSeleccionado = null
-        })
+        DialogoCobroProducto(
+            producto = producto,
+            alDescartar = { productoSeleccionado = null },
+            alConfirmar = { cantidad, precioFinal ->
+                alAgregarAlCarrito(ItemCarrito(producto.first, cantidad, precioFinal))
+                productoSeleccionado = null
+            }
+        )
     }
 }
 
 @Composable
-fun DialogoCobroProducto(producto: Pair<String, Double>, alDescartar: () -> Unit, alConfirmar: (Int, Double) -> Unit) {
+fun DialogoCobroProducto(
+    producto: Pair<String, Double>,
+    alDescartar: () -> Unit,
+    alConfirmar: (Int, Double) -> Unit
+) {
     var cantidad by remember { mutableIntStateOf(1) }
     var precioEditado by remember { mutableStateOf(producto.second.toString()) }
 
@@ -420,37 +591,70 @@ fun DialogoCobroProducto(producto: Pair<String, Double>, alDescartar: () -> Unit
         onDismissRequest = alDescartar,
         title = { Text(text = producto.first, fontWeight = FontWeight.Bold, fontSize = 20.sp) },
         text = {
-            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text("Cantidad:", fontWeight = FontWeight.SemiBold)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { if (cantidad > 1) cantidad-- }) { Icon(Icons.Default.Remove, contentDescription = "Menos") }
-                        Text(text = cantidad.toString(), fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp))
-                        IconButton(onClick = { cantidad++ }) { Icon(Icons.Default.Add, contentDescription = "Más") }
+                        IconButton(onClick = { if (cantidad > 1) cantidad-- }) {
+                            Icon(Icons.Default.Remove, contentDescription = "Menos")
+                        }
+                        Text(
+                            text = cantidad.toString(),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                        IconButton(onClick = { cantidad++ }) {
+                            Icon(Icons.Default.Add, contentDescription = "Más")
+                        }
                     }
                 }
                 OutlinedTextField(
-                    value = precioEditado, onValueChange = { precioEditado = it },
-                    label = { Text("Precio Unitario (S/.)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth(), singleLine = true
+                    value = precioEditado,
+                    onValueChange = { precioEditado = it },
+                    label = { Text("Precio Unitario (S/.)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
             }
         },
-        confirmButton = { Button(onClick = { alConfirmar(cantidad, precioEditado.toDoubleOrNull() ?: producto.second) }) { Text("Confirmar") } },
+        confirmButton = {
+            Button(onClick = { alConfirmar(cantidad, precioEditado.toDoubleOrNull() ?: producto.second) }) {
+                Text("Confirmar")
+            }
+        },
         dismissButton = { TextButton(onClick = alDescartar) { Text("Cancelar") } }
     )
 }
 
 @Composable
 fun FilaPlato(nombre: String, activo: Boolean, onCambio: (Boolean) -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Text(text = nombre, fontSize = 16.sp)
         Switch(checked = activo, onCheckedChange = onCambio)
     }
 }
 
+// ─── DialogoPago con botón Plin agregado ────────────────────────────────────
 @Composable
 fun DialogoPago(
-    totalMonto: Double, clientes: List<Cliente>, procesandoVenta: Boolean, alDescartar: () -> Unit, alConfirmar: (metodo: String, prestaPlato: Boolean, clienteId: Int?) -> Unit
+    totalMonto: Double,
+    clientes: List<Cliente>,
+    procesandoVenta: Boolean,
+    alDescartar: () -> Unit,
+    alConfirmar: (metodo: String, prestaPlato: Boolean, clienteId: Int?) -> Unit
 ) {
     var metodoSeleccionado by remember { mutableStateOf("Efectivo") }
     var prestaPlato by remember { mutableStateOf(false) }
@@ -464,29 +668,76 @@ fun DialogoPago(
         title = { Text(text = "Finalizar Venta", fontWeight = FontWeight.Bold) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
-                Text(text = "Monto a cobrar: S/. $totalMonto", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 16.dp))
+                Text(
+                    text = "Monto a cobrar: S/. ${"%.2f".format(totalMonto)}",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
                 Text(text = "Método de Pago:", fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(8.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BotonMetodoPago("Efectivo", metodoSeleccionado) { if(!procesandoVenta) metodoSeleccionado = it }
-                    BotonMetodoPago("Yape", metodoSeleccionado) { if(!procesandoVenta) metodoSeleccionado = it }
-                    BotonMetodoPago("Fiado", metodoSeleccionado) { if(!procesandoVenta) metodoSeleccionado = it }
+
+                // ✅ Primera fila: Efectivo, Yape, Plin
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    BotonMetodoPago("Efectivo", metodoSeleccionado) { if (!procesandoVenta) metodoSeleccionado = it }
+                    BotonMetodoPago("Yape", metodoSeleccionado) { if (!procesandoVenta) metodoSeleccionado = it }
+                    BotonMetodoPago("Plin", metodoSeleccionado) { if (!procesandoVenta) metodoSeleccionado = it }
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // ✅ Segunda fila: Fiado (separado para resaltar que es crédito)
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    BotonMetodoPago("Fiado", metodoSeleccionado) { if (!procesandoVenta) metodoSeleccionado = it }
+                    Spacer(Modifier.weight(2f))  // Empuja el botón fiado a la izquierda
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider()
                 Spacer(modifier = Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { if(!procesandoVenta) prestaPlato = !prestaPlato }.padding(vertical = 4.dp)) {
-                    Checkbox(checked = prestaPlato, onCheckedChange = { if(!procesandoVenta) prestaPlato = it })
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { if (!procesandoVenta) prestaPlato = !prestaPlato }
+                        .padding(vertical = 4.dp)
+                ) {
+                    Checkbox(
+                        checked = prestaPlato,
+                        onCheckedChange = { if (!procesandoVenta) prestaPlato = it }
+                    )
                     Text(text = "Se presta vajilla al cliente", fontSize = 16.sp)
                 }
+
                 if (requiereCliente) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("Selecciona al Caserito:", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+                    Text(
+                        "Selecciona al Caserito:",
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.error
+                    )
                     Box(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                        OutlinedButton(onClick = { if(!procesandoVenta) menuExpandido = true }, modifier = Modifier.fillMaxWidth()) { Text(text = clienteSeleccionado?.nombre ?: "Elegir Cliente...") }
-                        DropdownMenu(expanded = menuExpandido, onDismissRequest = { menuExpandido = false }, modifier = Modifier.fillMaxWidth(0.8f)) {
+                        OutlinedButton(
+                            onClick = { if (!procesandoVenta) menuExpandido = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(text = clienteSeleccionado?.nombre ?: "Elegir Cliente...")
+                        }
+                        DropdownMenu(
+                            expanded = menuExpandido,
+                            onDismissRequest = { menuExpandido = false },
+                            modifier = Modifier.fillMaxWidth(0.8f)
+                        ) {
                             clientes.forEach { cliente ->
-                                DropdownMenuItem(text = { Text(cliente.nombre) }, onClick = { clienteSeleccionado = cliente; menuExpandido = false })
+                                DropdownMenuItem(
+                                    text = { Text(cliente.nombre) },
+                                    onClick = { clienteSeleccionado = cliente; menuExpandido = false }
+                                )
                             }
                         }
                     }
@@ -494,11 +745,20 @@ fun DialogoPago(
             }
         },
         confirmButton = {
-            Button(onClick = { alConfirmar(metodoSeleccionado, prestaPlato, clienteSeleccionado?.id) }, enabled = puedeConfirmar && !procesandoVenta) {
-                if (procesandoVenta) CircularProgressIndicator(modifier = Modifier.size(20.dp)) else Text("Confirmar Venta")
+            Button(
+                onClick = { alConfirmar(metodoSeleccionado, prestaPlato, clienteSeleccionado?.id) },
+                enabled = puedeConfirmar && !procesandoVenta
+            ) {
+                if (procesandoVenta) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                } else {
+                    Text("Confirmar Venta")
+                }
             }
         },
-        dismissButton = { if (!procesandoVenta) TextButton(onClick = alDescartar) { Text("Cancelar") } }
+        dismissButton = {
+            if (!procesandoVenta) TextButton(onClick = alDescartar) { Text("Cancelar") }
+        }
     )
 }
 
@@ -506,7 +766,15 @@ fun DialogoPago(
 fun RowScope.BotonMetodoPago(metodo: String, metodoActual: String, alSeleccionar: (String) -> Unit) {
     val estaSeleccionado = metodo == metodoActual
     OutlinedButton(
-        onClick = { alSeleccionar(metodo) }, modifier = Modifier.weight(1f),
-        colors = ButtonDefaults.outlinedButtonColors(containerColor = if (estaSeleccionado) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, contentColor = if (estaSeleccionado) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
-    ) { Text(text = metodo, fontSize = 12.sp, maxLines = 1) }
+        onClick = { alSeleccionar(metodo) },
+        modifier = Modifier.weight(1f),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = if (estaSeleccionado) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surface,
+            contentColor = if (estaSeleccionado) MaterialTheme.colorScheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.onSurface
+        )
+    ) {
+        Text(text = metodo, fontSize = 12.sp, maxLines = 1)
+    }
 }

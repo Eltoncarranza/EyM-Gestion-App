@@ -4,12 +4,17 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.pi6u89.eymgestion.ui.compras.ComprasScreen
 import com.pi6u89.eymgestion.ui.fiados.FiadosScreen
@@ -19,21 +24,25 @@ import com.pi6u89.eymgestion.ui.venta.VentaScreen
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun MainScreen() {
-    val bottomNavController = rememberNavController()
-    var rutaActual by remember { mutableStateOf("venta") }
+    val navController = rememberNavController()
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val rutaActual = backStackEntry?.destination?.route ?: "venta"
 
     Scaffold(
         bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            ) {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceVariant) {
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.ShoppingCart, contentDescription = "Venta") },
                     label = { Text("Venta") },
                     selected = rutaActual == "venta",
                     onClick = {
-                        rutaActual = "venta"
-                        bottomNavController.navigate("venta")
+                        navController.navigate("venta") {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     }
                 )
                 NavigationBarItem(
@@ -41,8 +50,13 @@ fun MainScreen() {
                     label = { Text("Fiados") },
                     selected = rutaActual == "fiados",
                     onClick = {
-                        rutaActual = "fiados"
-                        bottomNavController.navigate("fiados")
+                        navController.navigate("fiados") {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     }
                 )
                 NavigationBarItem(
@@ -50,8 +64,13 @@ fun MainScreen() {
                     label = { Text("Compras") },
                     selected = rutaActual == "compras",
                     onClick = {
-                        rutaActual = "compras"
-                        bottomNavController.navigate("compras")
+                        navController.navigate("compras") {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     }
                 )
                 NavigationBarItem(
@@ -59,15 +78,20 @@ fun MainScreen() {
                     label = { Text("Reportes") },
                     selected = rutaActual == "reportes",
                     onClick = {
-                        rutaActual = "reportes"
-                        bottomNavController.navigate("reportes")
+                        navController.navigate("reportes") {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     }
                 )
             }
         }
     ) { paddingValues ->
         NavHost(
-            navController = bottomNavController,
+            navController = navController,
             startDestination = "venta",
             modifier = Modifier.padding(paddingValues)
         ) {

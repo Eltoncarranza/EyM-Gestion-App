@@ -8,13 +8,14 @@ import kotlinx.serialization.Serializable
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class Venta(
-    @EncodeDefault(EncodeDefault.Mode.NEVER) val id: Int = 0, // 👈 ¡ESTO EVITA EL ERROR EN SUPABASE!
-    @SerialName("monto_total") val montoTotal: Double,
-    @SerialName("costo_total") val costoTotal: Double? = 0.0,
-    @SerialName("metodo_pago") val metodoPago: String,
-    @SerialName("estado_pago") val estadoPago: String? = "PAGADO",
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val id: Int = 0,
+    @SerialName("monto_total") val montoTotal: Double = 0.0,
+    @SerialName("costo_total") val costoTotal: Double? = null,
+    @SerialName("metodo_pago") val metodoPago: String = "",
+    @SerialName("estado_pago") val estadoPago: String? = null,
     @SerialName("presta_plato") val prestaPlato: Boolean? = false,
     @SerialName("cliente_id") val clienteId: Int? = null,
     val fecha: String? = null,
-    val detalles: String? = ""
+    val detalles: String? = null
 )
