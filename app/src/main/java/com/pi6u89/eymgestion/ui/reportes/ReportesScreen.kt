@@ -39,16 +39,13 @@ fun ReportesScreen() {
     var todasLasCompras by remember { mutableStateOf<List<ItemCompra>>(emptyList()) }
     var cargando by remember { mutableStateOf(true) }
 
-    // Control de Fechas y Filtros (0=Día, 1=Semana, 2=Mes)
     var tipoFiltro by remember { mutableIntStateOf(0) }
     var fechaBase by remember { mutableStateOf(LocalDate.now()) }
 
-    // BottomSheet para ver el detalle
     val sheetState = rememberModalBottomSheetState()
     var mostrarBottomSheet by remember { mutableStateOf(false) }
     var categoriaSeleccionada by remember { mutableStateOf("") }
 
-    // Carga de datos masiva al entrar a la pantalla
     LaunchedEffect(Unit) {
         cargando = true
         todasLasVentas = ventasRepository.obtenerTodasLasVentas()
@@ -56,7 +53,6 @@ fun ReportesScreen() {
         cargando = false
     }
 
-    // 1. CÁLCULO DEL RANGO DE FECHAS SEGÚN EL FILTRO ELEGIDO
     val fechaInicio = when (tipoFiltro) {
         0 -> fechaBase
         1 -> fechaBase.with(DayOfWeek.MONDAY)
@@ -80,38 +76,39 @@ fun ReportesScreen() {
         else -> ""
     }
 
-    // 2. FILTRAMOS LAS LISTAS USANDO EL RANGO (Ingresos vs Gastos)
-    // 👈 ESTE FILTRO ES A PRUEBA DE ERRORES: Ignora la hora y compara solo fechas
     val ventasFiltradas = todasLasVentas.filter { venta ->
-        if (venta.fecha.isNullOrBlank()) false
+        if (venta.fecha.isNullOrBlank()) true
         else {
             try {
-                // Tomamos solo los primeros 10 caracteres (YYYY-MM-DD) para ignorar horas o zonas horarias
-                val soloFecha = venta.fecha.take(10)
-                val fechaVenta = LocalDate.parse(soloFecha)
+                val fechaLimpia = venta.fecha.take(10)
+                val fechaVenta = LocalDate.parse(fechaLimpia)
                 !fechaVenta.isBefore(fechaInicio) && !fechaVenta.isAfter(fechaFin)
             } catch (e: Exception) {
-                false // Si hay un formato raro, simplemente ignora esa venta y no bloquea el reporte
+                true
             }
         }
     }
 
     val comprasFiltradas = todasLasCompras.filter { compra ->
-        if (!compra.comprado || compra.fecha.isBlank()) false
+        if (compra.comprado != true || compra.fecha.isNullOrBlank()) false
         else {
-            val fechaCompra = try { LocalDate.parse(compra.fecha) } catch (e: Exception) { null }
-            fechaCompra != null && !fechaCompra.isBefore(fechaInicio) && !fechaCompra.isAfter(fechaFin)
+            try {
+                val fechaLimpia = compra.fecha.take(10)
+                val fechaCompra = LocalDate.parse(fechaLimpia)
+                !fechaCompra.isBefore(fechaInicio) && !fechaCompra.isAfter(fechaFin)
+            } catch (e: Exception) {
+                true
+            }
         }
     }
 
-    // 3. CÁLCULOS MATEMÁTICOS
-    val ventasEfectivo = ventasFiltradas.filter { (it.metodoPago).contains("Efectivo", true) && (it.estadoPago ?: "").contains("PAGADO", true) }
-    val ventasYape = ventasFiltradas.filter { (it.metodoPago).contains("Yape", true) && (it.estadoPago ?: "").contains("PAGADO", true) }
-    val ventasPlin = ventasFiltradas.filter { (it.metodoPago).contains("Plin", true) && (it.estadoPago ?: "").contains("PAGADO", true) }
+    val ventasEfectivo = ventasFiltradas.filter { (it.metodoPago ?: "").contains("Efectivo", true) && (it.estadoPago ?: "").contains("PAGADO", true) }
+    val ventasYape = ventasFiltradas.filter { (it.metodoPago ?: "").contains("Yape", true) && (it.estadoPago ?: "").contains("PAGADO", true) }
+    val ventasPlin = ventasFiltradas.filter { (it.metodoPago ?: "").contains("Plin", true) && (it.estadoPago ?: "").contains("PAGADO", true) }
     val ventasFiado = ventasFiltradas.filter { (it.estadoPago ?: "").contains("FIADO", true) }
 
-    val totalIngresos = ventasEfectivo.sumOf { it.montoTotal } + ventasYape.sumOf { it.montoTotal } + ventasPlin.sumOf { it.montoTotal }
-    val totalGastos = comprasFiltradas.sumOf { it.costo }
+    val totalIngresos = ventasEfectivo.sumOf { it.montoTotal ?: 0.0 } + ventasYape.sumOf { it.montoTotal ?: 0.0 } + ventasPlin.sumOf { it.montoTotal ?: 0.0 }
+    val totalGastos = comprasFiltradas.sumOf { it.costo ?: 0.0 }
     val gananciaNeta = totalIngresos - totalGastos
 
     Scaffold { paddingValues ->
@@ -121,7 +118,6 @@ fun ReportesScreen() {
         ) {
             Text("Balance Financiero", fontSize = 28.sp, fontWeight = FontWeight.Bold)
 
-            // --- TABS DE FILTRO (DÍA / SEMANA / MES) ---
             TabRow(selectedTabIndex = tipoFiltro) {
                 listOf("Día", "Semana", "Mes").forEachIndexed { index, title ->
                     Tab(
@@ -132,7 +128,6 @@ fun ReportesScreen() {
                 }
             }
 
-            // --- NAVEGADOR DE TIEMPO ---
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -157,8 +152,6 @@ fun ReportesScreen() {
             if (cargando) {
                 Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             } else {
-
-                // --- DASHBOARD DE RESULTADOS ---
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = if (gananciaNeta >= 0) Color(0xFFE8F5E9) else Color(0xFFFFEBEE))
@@ -178,18 +171,17 @@ fun ReportesScreen() {
                 Text("Desglose de Ingresos", fontWeight = FontWeight.Bold, fontSize = 18.sp)
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    CuadroReporte("Efectivo", ventasEfectivo.sumOf { it.montoTotal }, Color(0xFFF1F8E9), Color(0xFF33691E), Modifier.weight(1f).height(70.dp)) { categoriaSeleccionada = "Efectivo"; mostrarBottomSheet = true }
-                    CuadroReporte("Yape", ventasYape.sumOf { it.montoTotal }, Color(0xFFF3E5F5), Color(0xFF6A1B9A), Modifier.weight(1f).height(70.dp)) { categoriaSeleccionada = "Yape"; mostrarBottomSheet = true }
+                    CuadroReporte("Efectivo", ventasEfectivo.sumOf { it.montoTotal ?: 0.0 }, Color(0xFFF1F8E9), Color(0xFF33691E), Modifier.weight(1f).height(70.dp)) { categoriaSeleccionada = "Efectivo"; mostrarBottomSheet = true }
+                    CuadroReporte("Yape", ventasYape.sumOf { it.montoTotal ?: 0.0 }, Color(0xFFF3E5F5), Color(0xFF6A1B9A), Modifier.weight(1f).height(70.dp)) { categoriaSeleccionada = "Yape"; mostrarBottomSheet = true }
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    CuadroReporte("Plin", ventasPlin.sumOf { it.montoTotal }, Color(0xFFE0F7FA), Color(0xFF00838F), Modifier.weight(1f).height(70.dp)) { categoriaSeleccionada = "Plin"; mostrarBottomSheet = true }
-                    CuadroReporte("Fiados", ventasFiado.sumOf { it.montoTotal }, Color(0xFFFFEBEE), Color(0xFFC62828), Modifier.weight(1f).height(70.dp)) { categoriaSeleccionada = "Fiados"; mostrarBottomSheet = true }
+                    CuadroReporte("Plin", ventasPlin.sumOf { it.montoTotal ?: 0.0 }, Color(0xFFE0F7FA), Color(0xFF00838F), Modifier.weight(1f).height(70.dp)) { categoriaSeleccionada = "Plin"; mostrarBottomSheet = true }
+                    CuadroReporte("Fiados", ventasFiado.sumOf { it.montoTotal ?: 0.0 }, Color(0xFFFFEBEE), Color(0xFFC62828), Modifier.weight(1f).height(70.dp)) { categoriaSeleccionada = "Fiados"; mostrarBottomSheet = true }
                 }
             }
         }
 
-        // --- BOTTOM SHEET (Casi idéntico, solo adaptado) ---
         if (mostrarBottomSheet) {
             val ventasAMostrar = when (categoriaSeleccionada) {
                 "Efectivo" -> ventasEfectivo
@@ -215,7 +207,7 @@ fun ReportesScreen() {
                                         Spacer(modifier = Modifier.width(12.dp))
                                         Column {
                                             Text(text = venta.detalles.takeIf { !it.isNullOrBlank() } ?: "Sin detalles", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                                            Text(text = "Monto: S/. ${venta.montoTotal}", color = MaterialTheme.colorScheme.secondary, fontSize = 14.sp)
+                                            Text(text = "Monto: S/. ${venta.montoTotal ?: 0.0}", color = MaterialTheme.colorScheme.secondary, fontSize = 14.sp)
                                         }
                                     }
                                 }

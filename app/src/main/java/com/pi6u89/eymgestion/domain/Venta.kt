@@ -15,6 +15,6 @@ data class Venta(
     @SerialName("estado_pago") val estadoPago: String? = "PAGADO",
     @SerialName("presta_plato") val prestaPlato: Boolean? = false,
     @SerialName("cliente_id") val clienteId: Int? = null,
-    val fecha: String,
+    val fecha: String? = null,
     val detalles: String? = ""
 )
