@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class PlatoPrestado(
-    @EncodeDefault(EncodeDefault.Mode.NEVER) val id: Int = 0, // 👈 EL TRUCO ESTÁ AQUÍ
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val id: Int = 0,
     @SerialName("cliente_id") val clienteId: Int,
     @SerialName("cantidad_platos") val cantidadPlatos: Int,
     @SerialName("fecha_prestamo") val fechaPrestamo: String,

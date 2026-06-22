@@ -4,89 +4,97 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.pi6u89.eymgestion.data.AuthRepository
 import com.pi6u89.eymgestion.ui.compras.ComprasScreen
+import com.pi6u89.eymgestion.ui.compras.HistorialComprasScreen
 import com.pi6u89.eymgestion.ui.fiados.FiadosScreen
 import com.pi6u89.eymgestion.ui.reportes.ReportesScreen
 import com.pi6u89.eymgestion.ui.venta.VentaScreen
+import kotlinx.coroutines.launch
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun MainScreen() {
+fun MainScreen(onCerrarSesion: () -> Unit) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
-    val rutaActual = backStackEntry?.destination?.route ?: "venta"
+    val rutaActual = backStackEntry?.destination?.route
+    val rutasConBottomBar = listOf("venta", "fiados", "compras", "reportes")
+
+    val authRepository = remember { AuthRepository() }
+    val coroutineScope = rememberCoroutineScope()
+    var mostrarDialogoCerrarSesion by remember { mutableStateOf(false) }
 
     Scaffold(
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceVariant) {
-                NavigationBarItem(
-                    icon = { Icon(Icons.Default.ShoppingCart, contentDescription = "Venta") },
-                    label = { Text("Venta") },
-                    selected = rutaActual == "venta",
-                    onClick = {
-                        navController.navigate("venta") {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
+            if (rutaActual in rutasConBottomBar) {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceVariant) {
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.ShoppingCart, contentDescription = "Venta") },
+                        label = { Text("Venta") },
+                        selected = rutaActual == "venta",
+                        onClick = {
+                            navController.navigate("venta") {
+                                popUpTo("venta") { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
                             }
-                            launchSingleTop = true
-                            restoreState = true
                         }
-                    }
-                )
-                NavigationBarItem(
-                    icon = { Icon(Icons.Default.Person, contentDescription = "Fiados") },
-                    label = { Text("Fiados") },
-                    selected = rutaActual == "fiados",
-                    onClick = {
-                        navController.navigate("fiados") {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.Person, contentDescription = "Fiados") },
+                        label = { Text("Fiados") },
+                        selected = rutaActual == "fiados",
+                        onClick = {
+                            navController.navigate("fiados") {
+                                popUpTo("venta") { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
                             }
-                            launchSingleTop = true
-                            restoreState = true
                         }
-                    }
-                )
-                NavigationBarItem(
-                    icon = { Icon(Icons.Default.List, contentDescription = "Compras") },
-                    label = { Text("Compras") },
-                    selected = rutaActual == "compras",
-                    onClick = {
-                        navController.navigate("compras") {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Compras") },
+                        label = { Text("Compras") },
+                        selected = rutaActual == "compras",
+                        onClick = {
+                            navController.navigate("compras") {
+                                popUpTo("venta") { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
                             }
-                            launchSingleTop = true
-                            restoreState = true
                         }
-                    }
-                )
-                NavigationBarItem(
-                    icon = { Icon(Icons.Default.DateRange, contentDescription = "Reportes") },
-                    label = { Text("Reportes") },
-                    selected = rutaActual == "reportes",
-                    onClick = {
-                        navController.navigate("reportes") {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.DateRange, contentDescription = "Reportes") },
+                        label = { Text("Reportes") },
+                        selected = rutaActual == "reportes",
+                        onClick = {
+                            navController.navigate("reportes") {
+                                popUpTo("venta") { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
                             }
-                            launchSingleTop = true
-                            restoreState = true
                         }
-                    }
-                )
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Salir") },
+                        label = { Text("Salir") },
+                        selected = false,
+                        onClick = { mostrarDialogoCerrarSesion = true }
+                    )
+                }
             }
         }
     ) { paddingValues ->
@@ -97,8 +105,33 @@ fun MainScreen() {
         ) {
             composable("venta") { VentaScreen() }
             composable("fiados") { FiadosScreen() }
-            composable("compras") { ComprasScreen() }
+            composable("compras") { ComprasScreen(navController) }
             composable("reportes") { ReportesScreen() }
+            composable("historial_compras") { HistorialComprasScreen(navController) }
         }
+    }
+
+    if (mostrarDialogoCerrarSesion) {
+        AlertDialog(
+            onDismissRequest = { mostrarDialogoCerrarSesion = false },
+            title = { Text("Cerrar sesion") },
+            text = { Text("Seguro que quieres salir?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        coroutineScope.launch {
+                            authRepository.cerrarSesion()
+                            mostrarDialogoCerrarSesion = false
+                            onCerrarSesion()
+                        }
+                    }
+                ) { Text("Salir") }
+            },
+            dismissButton = {
+                TextButton(onClick = { mostrarDialogoCerrarSesion = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 }

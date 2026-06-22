@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
@@ -19,15 +20,26 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavHostController
 import com.pi6u89.eymgestion.data.ComprasRepository
 import com.pi6u89.eymgestion.domain.ItemCompra
 import kotlinx.coroutines.launch
-import java.time.LocalDate
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+fun formatearCantidad(cantidad: Double, unidad: String): String {
+    val cantStr = if (cantidad == cantidad.toLong().toDouble())
+        cantidad.toLong().toString()
+    else
+        "%.1f".format(cantidad)
+    return "$cantStr $unidad"
+}
 
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ComprasScreen() {
+fun ComprasScreen(navController: NavHostController) {
     val comprasRepository = remember { ComprasRepository() }
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -53,8 +65,19 @@ fun ComprasScreen() {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            FloatingActionButton(onClick = { mostrarDialogoAgregar = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Añadir")
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.End
+            ) {
+                SmallFloatingActionButton(
+                    onClick = { navController.navigate("historial_compras") },
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                ) {
+                    Icon(Icons.Default.BarChart, contentDescription = "Ver historial")
+                }
+                FloatingActionButton(onClick = { mostrarDialogoAgregar = true }) {
+                    Icon(Icons.Default.Add, contentDescription = "Añadir")
+                }
             }
         }
     ) { paddingValues ->
@@ -118,7 +141,11 @@ fun ComprasScreen() {
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(item.producto, fontWeight = FontWeight.Bold)
-                                    Text("Cant: ${item.cantidad}", fontSize = 12.sp)
+                                    Text(
+                                        formatearCantidad(item.cantidad, item.unidad),
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.secondary
+                                    )
                                 }
                                 Row {
                                     IconButton(onClick = { itemParaComprar = item }) {
@@ -130,11 +157,8 @@ fun ComprasScreen() {
                                             coroutineScope.launch {
                                                 procesandoAccion = true
                                                 val ok = comprasRepository.eliminarItem(item.id)
-                                                if (ok) {
-                                                    cargarDatos()
-                                                } else {
-                                                    snackbarHostState.showSnackbar("Error al eliminar")
-                                                }
+                                                if (ok) cargarDatos()
+                                                else snackbarHostState.showSnackbar("Error al eliminar")
                                                 procesandoAccion = false
                                             }
                                         }
@@ -158,7 +182,7 @@ fun ComprasScreen() {
                     if (comprados.isEmpty()) {
                         item {
                             Text(
-                                "Sin compras registradas aún.",
+                                "Sin compras registradas aun.",
                                 color = MaterialTheme.colorScheme.secondary,
                                 modifier = Modifier.padding(vertical = 8.dp)
                             )
@@ -169,7 +193,11 @@ fun ComprasScreen() {
                         ListItem(
                             headlineContent = { Text(item.producto) },
                             supportingContent = {
-                                Text(item.fecha ?: "", fontSize = 12.sp)
+                                Text(
+                                    formatearCantidad(item.cantidad, item.unidad) +
+                                            if (item.fecha.isNotBlank()) "  •  ${item.fecha.take(10)}" else "",
+                                    fontSize = 12.sp
+                                )
                             },
                             trailingContent = {
                                 Text(
@@ -187,13 +215,16 @@ fun ComprasScreen() {
 
     if (mostrarDialogoAgregar) {
         var prod by remember { mutableStateOf("") }
-        var cant by remember { mutableStateOf("") }
+        var cantTexto by remember { mutableStateOf("1") }
+        var unidadSeleccionada by remember { mutableStateOf("unidad") }
+        var expandido by remember { mutableStateOf(false) }
+        val unidades = listOf("unidad", "kg", "g", "L", "ml", "docena", "caja", "bolsa", "celda", "saco")
 
         AlertDialog(
             onDismissRequest = { if (!procesandoAccion) mostrarDialogoAgregar = false },
             title = { Text("Apuntar nuevo insumo") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
                         value = prod,
                         onValueChange = { prod = it },
@@ -201,23 +232,62 @@ fun ComprasScreen() {
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    OutlinedTextField(
-                        value = cant,
-                        onValueChange = { cant = it },
-                        label = { Text("Cantidad") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = cantTexto,
+                            onValueChange = { cantTexto = it },
+                            label = { Text("Cantidad") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        ExposedDropdownMenuBox(
+                            expanded = expandido,
+                            onExpandedChange = { expandido = !expandido },
+                            modifier = Modifier.weight(1.3f)
+                        ) {
+                            OutlinedTextField(
+                                value = unidadSeleccionada,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Unidad") },
+                                trailingIcon = {
+                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandido)
+                                },
+                                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                                singleLine = true
+                            )
+                            ExposedDropdownMenu(
+                                expanded = expandido,
+                                onDismissRequest = { expandido = false }
+                            ) {
+                                unidades.forEach { u ->
+                                    DropdownMenuItem(
+                                        text = { Text(u) },
+                                        onClick = {
+                                            unidadSeleccionada = u
+                                            expandido = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
                 Button(
-                    enabled = prod.isNotBlank() && cant.isNotBlank() && !procesandoAccion,
+                    enabled = prod.isNotBlank() && cantTexto.isNotBlank() && !procesandoAccion,
                     onClick = {
                         coroutineScope.launch {
                             procesandoAccion = true
+                            val cantidad = cantTexto.toDoubleOrNull() ?: 1.0
                             val ok = comprasRepository.agregarItem(
-                                ItemCompra(producto = prod.trim(), cantidad = cant.trim())
+                                ItemCompra(
+                                    producto = prod.trim(),
+                                    cantidad = cantidad,
+                                    unidad = unidadSeleccionada
+                                )
                             )
                             if (ok) {
                                 cargarDatos()
@@ -261,13 +331,15 @@ fun ComprasScreen() {
                         val costo = costoInput.toDoubleOrNull()
                         if (costo == null || costo <= 0.0) {
                             coroutineScope.launch {
-                                snackbarHostState.showSnackbar("Ingresa un monto válido")
+                                snackbarHostState.showSnackbar("Ingresa un monto valido")
                             }
                             return@Button
                         }
                         coroutineScope.launch {
                             procesandoAccion = true
-                            val fechaHoy = LocalDate.now().toString()
+                            val fechaHoy = SimpleDateFormat(
+                                "yyyy-MM-dd", Locale.getDefault()
+                            ).format(Date())
                             val ok = comprasRepository.marcarComoComprado(item.id, costo, fechaHoy)
                             if (ok) {
                                 itemParaComprar = null

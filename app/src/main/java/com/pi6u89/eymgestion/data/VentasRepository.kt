@@ -17,7 +17,6 @@ class VentasRepository {
                 SupabaseClient.client.postgrest["ventas"].insert(venta)
                 true
             } catch (e: Exception) {
-                // Log útil para depurar en Logcat: filtra por "VentasRepo"
                 Log.e("VentasRepo", "Error al registrar venta: ${e.message}", e)
                 false
             }
@@ -48,27 +47,25 @@ class VentasRepository {
         }
     }
 
-    /**
-     * Obtiene ventas dentro de un rango de fechas (inclusive).
-     * Filtra en Supabase para no descargar toda la tabla al celular.
-     *
-     * @param desde fecha en formato "yyyy-MM-dd"
-     * @param hasta fecha en formato "yyyy-MM-dd"
-     */
     suspend fun obtenerVentasPorRango(desde: String, hasta: String): List<Venta> {
         return withContext(Dispatchers.IO) {
             try {
-                SupabaseClient.client.postgrest["ventas"]
+                Log.d("VentasRepo", "Consultando ventas: $desde -> $hasta")
+
+                val resultado = SupabaseClient.client.postgrest["ventas"]
                     .select {
                         filter {
-                            // Filtra: fecha >= desde AND fecha <= hasta
-                            // Supabase acepta comparaciones de texto ISO yyyy-MM-dd correctamente
-                            gte("fecha", desde)
-                            lte("fecha", hasta)
+                            and {
+                                gte("fecha", desde)
+                                lte("fecha", hasta)
+                            }
                         }
                         order("fecha", Order.DESCENDING)
                     }
                     .decodeList<Venta>()
+
+                Log.d("VentasRepo", "Ventas recibidas: ${resultado.size}")
+                resultado
             } catch (e: Exception) {
                 Log.e("VentasRepo", "Error al obtener ventas [$desde - $hasta]: ${e.message}", e)
                 emptyList()
@@ -76,10 +73,6 @@ class VentasRepository {
         }
     }
 
-    /**
-     * Mantén este método solo si necesitas exportar o hacer un respaldo completo.
-     * Para los reportes del día/semana/mes usa obtenerVentasPorRango().
-     */
     suspend fun obtenerTodasLasVentas(): List<Venta> {
         return withContext(Dispatchers.IO) {
             try {

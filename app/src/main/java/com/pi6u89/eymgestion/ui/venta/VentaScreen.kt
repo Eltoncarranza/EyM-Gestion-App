@@ -647,7 +647,6 @@ fun FilaPlato(nombre: String, activo: Boolean, onCambio: (Boolean) -> Unit) {
     }
 }
 
-// ─── DialogoPago con botón Plin agregado ────────────────────────────────────
 @Composable
 fun DialogoPago(
     totalMonto: Double,

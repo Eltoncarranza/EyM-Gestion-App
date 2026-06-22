@@ -9,8 +9,9 @@ import kotlinx.serialization.Serializable
 data class ItemCompra(
     @EncodeDefault(EncodeDefault.Mode.NEVER) val id: Int = 0,
     val producto: String,
-    val cantidad: String,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val cantidad: Double = 1.0,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val unidad: String = "unidad",
     val comprado: Boolean = false,
     @EncodeDefault(EncodeDefault.Mode.NEVER) val costo: Double = 0.0,
-    @EncodeDefault(EncodeDefault.Mode.NEVER) val fecha: String? = null
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val fecha: String = ""
 )

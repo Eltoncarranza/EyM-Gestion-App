@@ -16,7 +16,6 @@ class CajaManager(private val context: Context) {
         val CAJA_ABIERTA_KEY = booleanPreferencesKey("caja_abierta")
         val FECHA_JORNADA_KEY = stringPreferencesKey("fecha_jornada")
         val PLATOS_ACTIVOS_KEY = stringSetPreferencesKey("platos_activos")
-        // 👈 NUEVA LLAVE PARA PROTEGER LOS PEDIDOS
         val PEDIDOS_GUARDADOS_KEY = stringPreferencesKey("pedidos_guardados")
     }
 
@@ -32,7 +31,6 @@ class CajaManager(private val context: Context) {
         preferences[PLATOS_ACTIVOS_KEY] ?: emptySet()
     }
 
-    // 👈 NUEVO FLUJO PARA LEER LOS PEDIDOS GUARDADOS DESDE EL DISCO DURO
     val pedidosGuardadosFlow: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[PEDIDOS_GUARDADOS_KEY] ?: "[]"
     }
@@ -45,7 +43,6 @@ class CajaManager(private val context: Context) {
         }
     }
 
-    // 👈 NUEVA FUNCIÓN PARA ACTUALIZAR LOS PEDIDOS EN EL DISCO DURO
     suspend fun actualizarPedidosGuardados(pedidosJson: String) {
         context.dataStore.edit { preferences ->
             preferences[PEDIDOS_GUARDADOS_KEY] = pedidosJson
@@ -57,7 +54,7 @@ class CajaManager(private val context: Context) {
             preferences[CAJA_ABIERTA_KEY] = false
             preferences.remove(FECHA_JORNADA_KEY)
             preferences.remove(PLATOS_ACTIVOS_KEY)
-            preferences.remove(PEDIDOS_GUARDADOS_KEY) // 👈 SE LIMPIAN SOLO AL CERRAR CAJA
+            preferences.remove(PEDIDOS_GUARDADOS_KEY)
         }
     }
 }

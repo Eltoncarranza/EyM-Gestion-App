@@ -2,7 +2,6 @@ package com.pi6u89.eymgestion.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Paleta "Gastronómica y Café"
 val PrimaryWarm = Color(0xFFD35400)
 val SecondaryCoffee = Color(0xFF6D4C41)
 val TertiaryAccent = Color(0xFFFFB300)

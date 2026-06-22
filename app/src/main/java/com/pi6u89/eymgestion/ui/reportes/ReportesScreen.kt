@@ -48,7 +48,6 @@ fun ReportesScreen() {
     var mostrarBottomSheet by remember { mutableStateOf(false) }
     var categoriaSeleccionada by remember { mutableStateOf("") }
 
-    // ─── Calcula el rango del período seleccionado ───────────────────────────
     val fechaInicio = when (tipoFiltro) {
         0 -> fechaBase
         1 -> fechaBase.with(DayOfWeek.MONDAY)
@@ -62,10 +61,8 @@ fun ReportesScreen() {
         else -> fechaBase
     }
 
-    // Formato ISO para la query de Supabase
-    val isoFormatter = DateTimeFormatter.ISO_LOCAL_DATE  // "yyyy-MM-dd"
+    val isoFormatter = DateTimeFormatter.ISO_LOCAL_DATE
 
-    // ─── Recarga datos con el rango correcto desde el servidor ──────────────
     fun recargarDatos() {
         coroutineScope.launch {
             cargando = true
@@ -82,7 +79,6 @@ fun ReportesScreen() {
         }
     }
 
-    // Recarga cuando cambia el rango (tipo o fecha base)
     LaunchedEffect(tipoFiltro, fechaInicio, fechaFin) {
         recargarDatos()
     }
@@ -113,15 +109,13 @@ fun ReportesScreen() {
         (it.estadoPago ?: "").contains("FIADO", true)
     }
 
-    // Compras del período: filtramos en memoria por fecha
     val comprasFiltradas = todasLasCompras.filter { compra ->
         if (compra.comprado != true || compra.fecha.isNullOrBlank()) return@filter false
         try {
-            // Soporta tanto "yyyy-MM-dd" como "yyyy-MM-ddTHH:mm:ss"
             val fechaCompra = LocalDate.parse(compra.fecha.take(10), isoFormatter)
             !fechaCompra.isBefore(fechaInicio) && !fechaCompra.isAfter(fechaFin)
         } catch (e: Exception) {
-            false // Fecha inválida = no incluir (antes era true, que causaba datos erróneos)
+            false
         }
     }
 
@@ -141,7 +135,6 @@ fun ReportesScreen() {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // ─── Encabezado ─────────────────────────────────────────────────
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -157,7 +150,6 @@ fun ReportesScreen() {
                 }
             }
 
-            // ─── Tabs Día / Semana / Mes ────────────────────────────────────
             TabRow(selectedTabIndex = tipoFiltro) {
                 listOf("Día", "Semana", "Mes").forEachIndexed { index, title ->
                     Tab(
@@ -171,7 +163,6 @@ fun ReportesScreen() {
                 }
             }
 
-            // ─── Navegación de fechas ────────────────────────────────────────
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -224,7 +215,6 @@ fun ReportesScreen() {
                 }
             } else {
 
-                // ─── Ganancia líquida ────────────────────────────────────────
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
@@ -248,7 +238,6 @@ fun ReportesScreen() {
                             fontWeight = FontWeight.ExtraBold,
                             color = if (gananciaNeta >= 0) Color(0xFF2E7D32) else Color(0xFFC62828)
                         )
-                        // Muestra cuántas ventas hay en el período para confirmar que cargó
                         Text(
                             "${todasLasVentas.size} venta(s) en el período",
                             fontSize = 12.sp,
@@ -257,7 +246,6 @@ fun ReportesScreen() {
                     }
                 }
 
-                // ─── Totales ingresos / gastos ───────────────────────────────
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -281,7 +269,6 @@ fun ReportesScreen() {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text("Desglose de ingresos", fontWeight = FontWeight.Bold, fontSize = 18.sp)
 
-                // ─── Cuadros por método de pago ──────────────────────────────
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -318,7 +305,6 @@ fun ReportesScreen() {
             }
         }
 
-        // ─── Bottom Sheet con detalle de ventas por categoría ───────────────
         if (mostrarBottomSheet) {
             val ventasAMostrar = when (categoriaSeleccionada) {
                 "Efectivo" -> ventasEfectivo
@@ -439,7 +425,6 @@ fun CuadroReporte(
                 color = colorTexto
             )
             Spacer(modifier = Modifier.height(2.dp))
-            // ✅ Consistente: siempre 2 decimales
             Text(
                 text = "S/. ${"%.2f".format(monto)}",
                 fontSize = 19.sp,
