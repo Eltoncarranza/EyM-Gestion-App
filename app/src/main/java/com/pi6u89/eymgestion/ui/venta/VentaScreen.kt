@@ -529,7 +529,7 @@ fun MenuCafeteria(alAgregarAlCarrito: (ItemCarrito) -> Unit) {
 fun MenuBebidas(alAgregarAlCarrito: (ItemCarrito) -> Unit) {
     val bebidas = listOf(
         "Maracuyá" to 2.0, "Chicha Morada" to 2.0, "Gordita" to 4.0,
-        "Inca 1L" to 5.0, "Coca Cola" to 5.0, "Pepsi 2L" to 6.0
+        "Personal" to 3.5, "Inca 1L" to 5.0, "Coca Cola" to 5.0, "Pepsi 2L" to 6.0
     )
     GridProductos(bebidas, alAgregarAlCarrito)
 }

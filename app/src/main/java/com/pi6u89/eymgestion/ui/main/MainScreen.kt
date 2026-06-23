@@ -4,7 +4,6 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Person
@@ -16,25 +15,19 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.pi6u89.eymgestion.data.AuthRepository
 import com.pi6u89.eymgestion.ui.compras.ComprasScreen
 import com.pi6u89.eymgestion.ui.compras.HistorialComprasScreen
 import com.pi6u89.eymgestion.ui.fiados.FiadosScreen
 import com.pi6u89.eymgestion.ui.reportes.ReportesScreen
 import com.pi6u89.eymgestion.ui.venta.VentaScreen
-import kotlinx.coroutines.launch
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun MainScreen(onCerrarSesion: () -> Unit) {
+fun MainScreen() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val rutaActual = backStackEntry?.destination?.route
     val rutasConBottomBar = listOf("venta", "fiados", "compras", "reportes")
-
-    val authRepository = remember { AuthRepository() }
-    val coroutineScope = rememberCoroutineScope()
-    var mostrarDialogoCerrarSesion by remember { mutableStateOf(false) }
 
     Scaffold(
         bottomBar = {
@@ -88,12 +81,6 @@ fun MainScreen(onCerrarSesion: () -> Unit) {
                             }
                         }
                     )
-                    NavigationBarItem(
-                        icon = { Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Salir") },
-                        label = { Text("Salir") },
-                        selected = false,
-                        onClick = { mostrarDialogoCerrarSesion = true }
-                    )
                 }
             }
         }
@@ -109,29 +96,5 @@ fun MainScreen(onCerrarSesion: () -> Unit) {
             composable("reportes") { ReportesScreen() }
             composable("historial_compras") { HistorialComprasScreen(navController) }
         }
-    }
-
-    if (mostrarDialogoCerrarSesion) {
-        AlertDialog(
-            onDismissRequest = { mostrarDialogoCerrarSesion = false },
-            title = { Text("Cerrar sesion") },
-            text = { Text("Seguro que quieres salir?") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        coroutineScope.launch {
-                            authRepository.cerrarSesion()
-                            mostrarDialogoCerrarSesion = false
-                            onCerrarSesion()
-                        }
-                    }
-                ) { Text("Salir") }
-            },
-            dismissButton = {
-                TextButton(onClick = { mostrarDialogoCerrarSesion = false }) {
-                    Text("Cancelar")
-                }
-            }
-        )
     }
 }
